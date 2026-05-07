@@ -10,7 +10,7 @@ from app.utils.log import log
 
 
 DB_STARTUP_RETRIES = 8
-DB_STARTUP_DELAY = 3  # seconds, exponential backoff: 3, 6, 12, 24...
+DB_STARTUP_DELAY = 3
 
 
 def _build_dsn() -> str:
@@ -87,6 +87,27 @@ async def init_db() -> None:
         try:
             async with engine.connect() as conn:
                 await conn.execute(sa.text("SELECT 1"))
+                # Early schema sanity-check: panel/auth relies on users table.
+                # If migrations were applied partially, fail fast with actionable logs.
+                exists = await conn.execute(
+                    sa.text("""
+                        SELECT EXISTS (
+                          SELECT 1 FROM information_schema.tables
+                          WHERE table_schema='public' AND table_name='users'
+                        )
+                    """)
+                )
+                # SQLAlchemy returns a Result; scalar_one() is safest but depends on driver.
+                try:
+                    users_exists = bool(exists.scalar_one())
+                except Exception:
+                    users_exists = False
+                if not users_exists:
+                    raise RuntimeError(
+                        'DB schema mismatch: relation "users" does not exist. '
+                        "Run alembic migrations (e.g. docker exec vpn_app uv run alembic upgrade head) "
+                        "or fix alembic_version with fix_alembic.py."
+                    )
             log.info("Database connection verified")
             return
         except Exception as e:
