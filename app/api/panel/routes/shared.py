@@ -137,9 +137,25 @@ def _require_auth(request: Request) -> dict:
     """Enforce authentication. Returns {"sub": str, "role": str}."""
     info = _get_admin_info(request)
     if info is None:
+        # Helpful debug info for 401/redirect/403 cascades
+        try:
+            cookie_present = bool(request.cookies.get(SESSION_COOKIE))
+        except Exception:
+            cookie_present = False
+
         is_htmx = request.headers.get("HX-Request") == "true"
         is_api = "/api/" in str(request.url.path)
         is_json = "application/json" in request.headers.get("accept", "")
+
+        log.warning(
+            "Panel auth failed: path=%s hx=%s api=%s json=%s cookie_present=%s",
+            request.url.path,
+            is_htmx,
+            is_api,
+            is_json,
+            cookie_present,
+        )
+
         if is_api or is_json:
             from fastapi import HTTPException
             raise HTTPException(status_code=401, detail="Not authenticated")
@@ -156,7 +172,17 @@ def _require_auth(request: Request) -> dict:
 def _require_permission(request: Request, permission: str) -> dict:
     """Enforce authentication and check permission. Returns admin info dict."""
     info = _require_auth(request)
-    if not has_permission(info["role"], permission):
+    role = info.get("role") if isinstance(info, dict) else None
+
+    if not has_permission(role, permission):
+        log.warning(
+            "Panel permission denied: path=%s role=%s required=%s sub=%s",
+            request.url.path,
+            role,
+            permission,
+            info.get("sub") if isinstance(info, dict) else None,
+        )
+
         is_htmx = request.headers.get("HX-Request") == "true"
         from fastapi import HTTPException
         if is_htmx:

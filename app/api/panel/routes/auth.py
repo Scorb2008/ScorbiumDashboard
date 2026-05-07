@@ -34,6 +34,7 @@ import io
 
 
 @router.get("/ws-token")
+@router.get("/ws-token/")
 async def ws_token(request: Request):
     """Return a short-lived token for WebSocket authentication."""
     admin_info = _require_auth(request)
@@ -78,6 +79,7 @@ async def miniapp_login(request: Request, token: str = ""):
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 @router.get("/login", response_class=HTMLResponse)
+@router.get("/login/", response_class=HTMLResponse)
 async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
     settings = await BotSettingsService(db).get_all()
     custom_logo = settings.get("custom_logo", "")
@@ -88,7 +90,7 @@ async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
             "error": None,
             "app_name": config.web.app_name,
             "app_version": config.web.app_version,
-            "custom_logo": custom_logo
+            "custom_logo": custom_logo,
         },
     )
 

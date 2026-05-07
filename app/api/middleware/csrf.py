@@ -11,12 +11,14 @@ _STATE_CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 _SAFE_PATHS = {
     "/panel/login",
+    "/panel/login/",
     "/panel/login-2fa",
     "/panel/logout",
     "/panel/2fa-login",
     "/panel/miniapp-login",
     "/panel/miniapp-token",
     "/panel/ws-token",
+    "/panel/ws-token/",
     "/health",
 }
 
