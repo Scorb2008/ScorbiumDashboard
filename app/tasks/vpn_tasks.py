@@ -47,6 +47,7 @@ async def expire_loop() -> None:
             await auto_renew_keys()
         except Exception as e:
             log.error("expire_loop error: %s", e, exc_info=True)
+            await asyncio.sleep(EXPIRE_CHECK_INTERVAL)
 
 
 async def sync_loop() -> None:
@@ -58,6 +59,7 @@ async def sync_loop() -> None:
             await asyncio.sleep(SYNC_INTERVAL)
         except Exception as e:
             log.error("sync_loop error: %s", e, exc_info=True)
+            await asyncio.sleep(SYNC_INTERVAL)
 
 
 async def notify_expiring_soon() -> None:

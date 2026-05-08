@@ -14,11 +14,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 def _secret_key() -> str:
     """Return a dedicated JWT signing secret."""
     import os
+    import secrets as _secrets
     secret = os.environ.get("JWT_SECRET_KEY", "").strip()
     if not secret:
-        raise RuntimeError(
-            "JWT_SECRET_KEY is not set. Generate one: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        log.warning(
+            "JWT_SECRET_KEY is not set. Using temporary random key — "
+            "all sessions will be invalidated on restart!"
         )
+        secret = _secrets.token_urlsafe(32)
     return secret
 
 def hash_password(password: str) -> str:

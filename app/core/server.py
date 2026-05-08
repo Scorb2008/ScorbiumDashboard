@@ -109,6 +109,14 @@ async def _lifespan(app: FastAPI):
     global _bot, _dp
 
     log.info("🚀 Starting VPN Dashboard API...")
+
+    import os as _os
+    if not _os.environ.get("JWT_SECRET_KEY", "").strip():
+        log.warning(
+            "JWT_SECRET_KEY is not set! Authentication will fail. "
+            "Generate one: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        )
+
     await init_db()
 
     from aiogram import Bot
@@ -168,8 +176,8 @@ async def _lifespan(app: FastAPI):
                     await _s.commit()
                     if removed:
                         log.info(f"Cleaned up {removed} expired blacklisted tokens")
-            except Exception:
-                pass
+            except Exception as e:
+                log.error("token_cleanup error: %s", e, exc_info=True)
     _start_bg_task(_token_cleanup_loop(), name="token_cleanup")
 
     import os as _os
@@ -231,12 +239,12 @@ async def _lifespan(app: FastAPI):
             await _bot.delete_webhook()
         else:
             await _dp.stop_polling()
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("Bot shutdown error (non-critical): %s", e)
     try:
         await _bot.session.close()
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("Bot session close error (non-critical): %s", e)
     await close_db()
 
 
@@ -446,15 +454,16 @@ def create_app() -> FastAPI:
     @app.websocket("/ws/metrics")
     async def websocket_metrics(websocket: WebSocket):
         """WebSocket endpoint for real-time system metrics. Requires valid session cookie."""
-        from fastapi import WebSocketException
         from app.utils.security import decode_access_token_full
 
         cookie = websocket.cookies.get("vpn_session")
         if not cookie:
-            raise WebSocketException(code=1008, reason="Unauthorized")
+            await websocket.close(code=4001)
+            return
         admin_info = decode_access_token_full(cookie)
         if not admin_info:
-            raise WebSocketException(code=1008, reason="Unauthorized")
+            await websocket.close(code=4001)
+            return
         await websocket.accept()
         try:
             while True:

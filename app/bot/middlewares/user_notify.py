@@ -16,6 +16,8 @@ from app.utils.log import log
 # Кэш: user_id -> timestamp последнего уведомления (чтобы не спамить)
 _notified_expired: dict[int, float] = {}
 _notified_pending: dict[int, float] = {}
+_bg_tasks: set[asyncio.Task] = set()
+_BG_SEM = asyncio.Semaphore(50)
 
 _EXPIRED_COOLDOWN = 86400   # 24 часа между уведомлениями о просрочке
 _PENDING_COOLDOWN = 300     # 5 минут между уведомлениями о pending
@@ -38,10 +40,22 @@ class UserNotifyMiddleware(BaseMiddleware):
                 user_id = event.callback_query.from_user.id
 
         if user_id:
-            asyncio.create_task(_update_last_seen(user_id))
-            asyncio.create_task(_check_and_notify(user_id))
+            for coro in (_update_last_seen(user_id), _check_and_notify(user_id)):
+                if _BG_SEM.locked():
+                    break
+                task = asyncio.create_task(_coro_wrapper(coro))
+                _bg_tasks.add(task)
+                task.add_done_callback(_bg_tasks.discard)
 
         return await handler(event, data)
+
+
+async def _coro_wrapper(coro):
+    async with _BG_SEM:
+        try:
+            await coro
+        except Exception:
+            pass
 
 
 async def _update_last_seen(user_id: int) -> None:

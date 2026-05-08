@@ -47,7 +47,7 @@ async def check_pending_yookassa_payments() -> None:
                 Payment.provider == PaymentProvider.YOOKASSA.value,
                 Payment.external_id.isnot(None),
                 Payment.created_at >= cutoff,
-            )
+            ).limit(100)
         )
         payments = list(result.scalars().all())
 
