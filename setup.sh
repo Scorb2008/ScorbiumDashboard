@@ -670,6 +670,14 @@ else
         exit 1
     fi
 
+    info "Проверяю пароль БД..."
+    DB_PASS=${DB_PASS:-postgres}
+    if ! docker exec -e PGPASSWORD="${DB_PASS}" vpn_db psql -U "${DB_USER}" -d "${DB_NAME}" -h localhost -c "SELECT 1" &>/dev/null 2>&1; then
+        warn "Пароль БД не совпадает. Исправляю..."
+        docker exec vpn_db psql -U "${DB_USER}" -c "ALTER USER ${DB_USER} PASSWORD '${DB_PASS}';" &>/dev/null 2>&1
+        sleep 1
+    fi
+
     info "Применяю миграции БД..."
     docker compose exec app uv run python fix_alembic.py
     docker compose exec app uv run alembic upgrade head

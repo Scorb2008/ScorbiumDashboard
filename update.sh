@@ -146,6 +146,33 @@ else
     BACKUP_FILE=""
 fi
 
+# ── DB password check ─────────────────────────────────────────────────────────
+DB_PASS=$(grep "^DB_PASSWORD=" .env | cut -d= -f2- | sed 's/[[:space:]]*#.*//' | xargs)
+info "Проверяю пароль БД..."
+if ! docker exec -e PGPASSWORD="${DB_PASS}" vpn_db psql -U "${DB_USER}" -d "${DB_NAME}" -h localhost -c "SELECT 1" &>/dev/null 2>&1; then
+    warn "Пароль БД в .env не совпадает с PostgreSQL. Исправляю..."
+    if docker exec vpn_db psql -U "${DB_USER}" -c "ALTER USER ${DB_USER} PASSWORD '${DB_PASS}';" &>/dev/null 2>&1; then
+        sleep 1
+        if docker exec -e PGPASSWORD="${DB_PASS}" vpn_db psql -U "${DB_USER}" -d "${DB_NAME}" -h localhost -c "SELECT 1" &>/dev/null 2>&1; then
+            success "Пароль БД обновлён"
+        else
+            warn "Не удалось сменить пароль. Пробую пересоздать volume..."
+            docker compose -f "$COMPOSE_FILE" down -v db
+            docker compose -f "$COMPOSE_FILE" up -d db
+            info "Жду готовности БД..."
+            for i in $(seq 1 12); do
+                docker inspect --format='{{.State.Health.Status}}' vpn_db 2>/dev/null | grep -q healthy && break
+                sleep 5
+            done
+            success "БД пересоздана"
+        fi
+    else
+        error "Не удалось исправить пароль БД. Запустите: bash setup.sh"
+    fi
+else
+    success "Пароль БД верный"
+fi
+
 # ── [2/6] Git pull ────────────────────────────────────────────────────────────
 info "[2/6] Обновляю код..."
 
