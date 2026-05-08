@@ -492,6 +492,11 @@ def create_app() -> FastAPI:
         await dp.feed_update(bot, update)
         return JSONResponse({"ok": True})
 
+    @app.get("/panel", include_in_schema=False)
+    async def panel_redirect():
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/panel/")
+
     @app.get("/panel-root", include_in_schema=False)
     async def panel_root():
         from fastapi.responses import RedirectResponse

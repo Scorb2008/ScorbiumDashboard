@@ -301,6 +301,9 @@ http {
         proxy_next_upstream   error timeout http_502 http_503;
         proxy_next_upstream_tries 2;
 
+        location = /panel {
+            return 301 /panel/;
+        }
         location /panel/ {
             limit_req zone=panel burst=20 nodelay;
             proxy_pass http://vpn_app;
