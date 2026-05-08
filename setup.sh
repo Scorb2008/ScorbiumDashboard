@@ -495,11 +495,15 @@ touch setup.lock
         }
 
         info "Копирую сертификаты..."
+        CERT_SRC=$(ls -d /etc/letsencrypt/live/${DOMAIN}* 2>/dev/null | head -1)
+        if [[ -z "$CERT_SRC" ]]; then
+            error "Папка сертификатов не найдена в /etc/letsencrypt/live/"
+        fi
         mkdir -p "nginx/ssl/live/${DOMAIN}"
-        cp "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" "nginx/ssl/live/${DOMAIN}/"
-        cp "/etc/letsencrypt/live/${DOMAIN}/privkey.pem" "nginx/ssl/live/${DOMAIN}/"
+        cp "$CERT_SRC/fullchain.pem" "nginx/ssl/live/${DOMAIN}/"
+        cp "$CERT_SRC/privkey.pem" "nginx/ssl/live/${DOMAIN}/"
         chmod 600 "nginx/ssl/live/${DOMAIN}/privkey.pem"
-        success "Сертификаты скопированы"
+        success "Сертификаты скопированы из ${CERT_SRC}"
 
         # Cron для автообновления
         PROJECT_DIR="$(pwd)"
@@ -507,7 +511,7 @@ touch setup.lock
         cat > "$CRON_FILE" <<CRONEOF
 0 3 * * * root certbot renew --quiet --standalone \
   --pre-hook "docker compose -f ${PROJECT_DIR}/docker-compose.prod.yml stop nginx" \
-  --post-hook "cp /etc/letsencrypt/live/${DOMAIN}/fullchain.pem ${PROJECT_DIR}/nginx/ssl/live/${DOMAIN}/ && cp /etc/letsencrypt/live/${DOMAIN}/privkey.pem ${PROJECT_DIR}/nginx/ssl/live/${DOMAIN}/ && docker compose -f ${PROJECT_DIR}/docker-compose.prod.yml start nginx"
+  --post-hook "CERT_SRC=\$(ls -d /etc/letsencrypt/live/${DOMAIN}* | head -1); cp \$CERT_SRC/fullchain.pem ${PROJECT_DIR}/nginx/ssl/live/${DOMAIN}/ && cp \$CERT_SRC/privkey.pem ${PROJECT_DIR}/nginx/ssl/live/${DOMAIN}/ && docker compose -f ${PROJECT_DIR}/docker-compose.prod.yml start nginx"
 CRONEOF
         chmod 644 "$CRON_FILE"
         echo "" >> "$CRON_FILE"
