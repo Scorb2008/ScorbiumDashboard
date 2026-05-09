@@ -180,7 +180,7 @@
     </div>
   </div>
 
-  <!-- Статус всех систем -->
+  <!-- Language selector -->
   <div class="col-12">
     <div class="card p-3">
       <div class="fw-semibold" style="color:var(--text)" mb-3"><i class="bi bi-translate me-2 text-muted"></i>Язык бота по умолчанию</div>
@@ -201,7 +201,7 @@
     </div>
   </div>
 
-  <!-- CryptoBot token -->
+  <!-- Trial period -->
   <div class="col-12">
     <div class="card p-3">
       <div class="fw-semibold" style="color:var(--text)" mb-3"><i class="bi bi-gift me-2 text-muted"></i>Пробный период</div>
@@ -839,6 +839,22 @@
               <button type="button" class="btn btn-outline-secondary" onclick="togglePass('fk-s2')">
                 <i class="bi bi-eye"></i>
               </button>
+            </div>
+          </div>
+        </div>
+        {% if ps.freekassa_configured %}
+        <div style="font-size:.7rem;color:#22c55e;margin-bottom:.5rem"><i class="bi bi-check-circle me-1"></i>Данные сохранены. Оставьте поля пустыми чтобы не менять.</div>
+        {% endif %}
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-accent flex-fill"><i class="bi bi-floppy me-1"></i>Сохранить</button>
+          <button type="button" class="btn btn-outline-secondary"
+            hx-post="/panel/telegram/payment-systems/freekassa/test" hx-swap="none"
+            hx-on::after-request="handlePsResponse(event, 'fk-test')">
+            <i class="bi bi-lightning me-1"></i>Проверить
+          </button>
+        </div>
+      </form>
+      <div id="fk-result" class="mt-2" style="font-size:.8rem"></div>
     </div>
   </div>
 
@@ -895,22 +911,6 @@
         </div>
       </form>
       <div id="pl2-result" class="mt-2" style="font-size:.8rem"></div>
-    </div>
-  </div>
-</div>
-        {% if ps.freekassa_configured %}
-        <div style="font-size:.7rem;color:#22c55e;margin-bottom:.5rem"><i class="bi bi-check-circle me-1"></i>Данные сохранены. Оставьте поля пустыми чтобы не менять.</div>
-        {% endif %}
-        <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-accent flex-fill"><i class="bi bi-floppy me-1"></i>Сохранить</button>
-          <button type="button" class="btn btn-outline-secondary"
-            hx-post="/panel/telegram/payment-systems/freekassa/test" hx-swap="none"
-            hx-on::after-request="handlePsResponse(event, 'fk-test')">
-            <i class="bi bi-lightning me-1"></i>Проверить
-          </button>
-        </div>
-      </form>
-      <div id="fk-result" class="mt-2" style="font-size:.8rem"></div>
     </div>
   </div>
 
