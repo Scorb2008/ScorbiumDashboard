@@ -44,31 +44,33 @@ async def pg_users(request: Request):
         return HTMLResponse(f'<div style="color:#ef4444">Ошибка: {html.escape(str(e))}</div>')
 
     if not users:
-        return HTMLResponse('<div style="color:#8892a4">Пользователей нет</div>')
+        return HTMLResponse('<div class="text-center py-4" style="color:#8892a4">Пользователей нет</div>')
 
     rows = ""
     for u in users:
         status = u.get("status", "")
-        color = {"active": "#22c55e", "expired": "#ef4444", "disabled": "#eab308"}.get(status, "#8892a4")
+        dot_class = {"active": "online", "expired": "offline", "disabled": "warning"}.get(status, "")
+        status_label = {"active": "Активен", "expired": "Истёк", "disabled": "Отключён"}.get(status, status)
         used = round((u.get("used_traffic", 0) or 0) / 1073741824, 2)
         limit = u.get("data_limit", 0) or 0
         limit_str = f"{round(limit / 1073741824, 1)} GB" if limit else "∞"
         username = html.escape(str(u.get("username", "")))
         expire = html.escape(str(u.get("expire", "—") or "—"))
-        rows += f"""<tr class="user-row">
-          <td><code style="color:var(--accent)">{username}</code></td>
-          <td><span style="color:{color};font-size:.75rem">{html.escape(str(status))}</span></td>
-          <td style="font-size:.78rem;color:#8892a4">{used} / {limit_str}</td>
-          <td style="font-size:.75rem;color:#8892a4">{expire}</td>
-        </tr>"""
+        rows += f"""<div class="user-row">
+          <div style="flex:1;min-width:0">
+            <code style="color:var(--accent);font-size:.85rem">{username}</code>
+            <div style="font-size:.7rem;color:#8892a4;margin-top:.15rem">{used} GB / {limit_str}</div>
+          </div>
+          <div class="text-end" style="flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:.4rem">
+              <span class="status-dot {dot_class}"></span>
+              <span style="font-size:.75rem;color:var(--text-muted)">{status_label}</span>
+            </div>
+            <div style="font-size:.7rem;color:#8892a4;margin-top:.2rem">{expire}</div>
+          </div>
+        </div>"""
 
-    return HTMLResponse(f"""
-    <div class="table-responsive">
-      <table class="table mb-0">
-        <thead><tr><th>Username</th><th>Статус</th><th>Трафик</th><th>Истекает</th></tr></thead>
-        <tbody>{rows}</tbody>
-      </table>
-    </div>""")
+    return HTMLResponse(f'<div class="p-2">{rows}</div>')
 
 
 @router.get("/groups", response_class=HTMLResponse)
@@ -84,28 +86,26 @@ async def pg_groups(request: Request):
         return HTMLResponse(f'<div style="color:#ef4444">Ошибка: {html.escape(str(e))}</div>')
 
     if not groups:
-        return HTMLResponse('<div style="color:#8892a4">Групп нет</div>')
+        return HTMLResponse('<div class="text-center py-4" style="color:#8892a4">Групп нет</div>')
 
     rows = ""
     for g in groups:
-        disabled = "🔴" if g.get("is_disabled") else "✅"
+        disabled = g.get("is_disabled", False)
         inbounds = ", ".join(g.get("inbound_tags", []))
         group_name = html.escape(str(g.get("name", "")))
-        rows += f"""<tr>
-          <td><code style="color:var(--accent)">{g.get("id")}</code></td>
-          <td class="text-white">{group_name}</td>
-          <td style="font-size:.75rem;color:#8892a4">{html.escape(inbounds)}</td>
-          <td>{disabled}</td>
-          <td style="color:#8892a4">{g.get("total_users", 0)}</td>
-        </tr>"""
+        rows += f"""<div class="group-row">
+          <div style="flex:1;min-width:0">
+            <code style="color:var(--accent);font-size:.85rem">{g.get("id")}</code>
+            <span class="ms-2" style="font-size:.85rem;color:var(--text)">{group_name}</span>
+            <div style="font-size:.7rem;color:#8892a4;margin-top:.15rem">{html.escape(inbounds)}</div>
+          </div>
+          <div class="text-end" style="flex-shrink:0">
+            <span class="status-dot {"offline" if disabled else "online"}"></span>
+            <span style="font-size:.75rem;color:var(--text-muted);margin-left:.3rem">{g.get("total_users", 0)} юз.</span>
+          </div>
+        </div>"""
 
-    return HTMLResponse(f"""
-    <div class="table-responsive">
-      <table class="table mb-0">
-        <thead><tr><th>ID</th><th>Название</th><th>Inbounds</th><th>Статус</th><th>Юзеров</th></tr></thead>
-        <tbody>{rows}</tbody>
-      </table>
-    </div>""")
+    return HTMLResponse(f'<div class="p-2">{rows}</div>')
 
 
 @router.get("/nodes", response_class=HTMLResponse)
@@ -122,25 +122,25 @@ async def pg_nodes(request: Request):
         return HTMLResponse(f'<div style="color:#ef4444">Ошибка: {html.escape(str(e))}</div>')
 
     if not nodes:
-        return HTMLResponse('<div style="color:#8892a4">Нод нет</div>')
+        return HTMLResponse('<div class="text-center py-4" style="color:#8892a4">Нод нет</div>')
 
     rows = ""
     for n in nodes:
         status = n.get("status", "")
-        color = {"connected": "#22c55e", "connecting": "#eab308", "error": "#ef4444"}.get(status, "#8892a4")
+        dot_class = {"connected": "online", "connecting": "warning", "error": "offline"}.get(status, "")
+        status_label = {"connected": "Подключена", "connecting": "Подключение", "error": "Ошибка"}.get(status, status)
         node_name = html.escape(str(n.get("name", "")))
         node_addr = html.escape(str(n.get("address", "")))
-        rows += f"""<tr>
-          <td><code style="color:var(--accent)">{html.escape(str(n.get("id", "")))}</code></td>
-          <td class="text-white">{node_name}</td>
-          <td style="font-size:.8rem;color:#8892a4">{node_addr}</td>
-          <td><span style="color:{color};font-size:.75rem">{html.escape(str(status))}</span></td>
-        </tr>"""
+        rows += f"""<div class="node-row">
+          <div style="flex:1;min-width:0">
+            <code style="color:var(--accent);font-size:.85rem">{html.escape(str(n.get("id", "")))}</code>
+            <span class="ms-2" style="font-size:.85rem;color:var(--text)">{node_name}</span>
+            <div style="font-size:.7rem;color:#8892a4;margin-top:.15rem">{node_addr}</div>
+          </div>
+          <div class="text-end" style="flex-shrink:0">
+            <span class="status-dot {dot_class}"></span>
+            <span style="font-size:.75rem;color:var(--text-muted);margin-left:.3rem">{status_label}</span>
+          </div>
+        </div>"""
 
-    return HTMLResponse(f"""
-    <div class="table-responsive">
-      <table class="table mb-0">
-        <thead><tr><th>ID</th><th>Название</th><th>Адрес</th><th>Статус</th></tr></thead>
-        <tbody>{rows}</tbody>
-      </table>
-    </div>""")
+    return HTMLResponse(f'<div class="p-2">{rows}</div>')

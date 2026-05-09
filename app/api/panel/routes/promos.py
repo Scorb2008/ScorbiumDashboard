@@ -29,22 +29,19 @@ async def promos_page(request: Request, db: AsyncSession = Depends(get_db)):
 async def create_promo(
     request: Request,
     code: str = Form(...),
-    discount_percent: int = Form(...),
+    promo_type: str = Form("discount"),
+    value: Decimal = Form(...),
+    plan_id: Optional[int] = Form(None),
     max_uses: int = Form(0),
-    expires_days: int = Form(30),
     db: AsyncSession = Depends(get_db),
 ):
     _require_permission(request, "promos")
-    if discount_percent < 1 or discount_percent > 100:
-        resp = Response(status_code=400)
-        _toast(resp, "Скидка должна быть от 1 до 100%", "error")
-        return resp
     await PromoService(db).create(
         code=code.strip(),
-        promo_type="discount_percent",
-        value=discount_percent,
-        max_uses=max_uses or None,
-        expires_days=expires_days,
+        promo_type=promo_type,
+        value=value,
+        plan_id=plan_id,
+        max_uses=max_uses or 0,
     )
     await db.commit()
     resp = templates.TemplateResponse(
