@@ -314,19 +314,6 @@ def create_app() -> FastAPI:
             status_code=403,
         )
 
-    class _TrailingSlashNormalizer(_BHM):
-        """Strip trailing slashes from all paths except root to prevent 307 redirects."""
-        async def dispatch(self, request: Request, call_next):
-            path = request.url.path
-            if len(path) > 1 and path.endswith("/"):
-                from starlette.datastructures import URL
-                new_path = path.rstrip("/")
-                request.scope["path"] = new_path
-                request.scope["root_path"] = request.scope.get("root_path", "").rstrip("/")
-                request._url = URL(scope=request.scope)
-            return await call_next(request)
-    app.add_middleware(_TrailingSlashNormalizer)
-
     class _SecurityHeaders(_BHM):
         async def dispatch(self, request: Request, call_next):
             resp = await call_next(request)

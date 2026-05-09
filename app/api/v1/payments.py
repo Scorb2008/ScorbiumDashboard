@@ -64,7 +64,7 @@ async def refund_payment(
 async def freekassa_webhook(request: Request, db: AsyncSession = Depends(get_db)) -> str:
     """
     URL оповещения для FreeKassa.
-    Укажи в личном кабинете: https://project.globaltunnel-vpn.cfd/api/v1/payments/webhook/freekassa
+    Укажи в личном кабинете: https://project.cfd/api/v1/payments/webhook/freekassa
     """
     import ipaddress
     from app.services.freekassa import FreeKassaService
