@@ -180,62 +180,6 @@
     </div>
   </div>
 
-  <!-- Platega.io -->
-  <div class="col-lg-6">
-    <div class="card p-3">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <div class="fw-semibold" style="color:var(--text)"><i class="bi bi-credit-card-fill me-2" style="color:#6366f1"></i>Platega.io</div>
-        <div class="d-flex align-items-center gap-2">
-          <span id="pl2-status" class="badge badge-custom {% if ps.platega_enabled %}badge-active{% else %}badge-closed{% endif %}">
-            {% if ps.platega_enabled %}✓ Включена{% else %}✗ Отключена{% endif %}
-          </span>
-          {% if ps.platega_configured %}
-          <div class="form-check form-switch mb-0">
-            <input class="form-check-input" type="checkbox" id="pl2-toggle"
-                   {% if ps.platega_toggle %}checked{% endif %}
-                   onchange="psToggle('ps_platega_enabled', this.checked, 'pl2')">
-          </div>
-          {% endif %}
-        </div>
-      </div>
-      <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.75rem">
-        Платежи через <a href="https://platega.io" target="_blank" style="color:#00d4aa">Platega.io</a>. Кредитные карты, СБП, криптовалюта.
-      </div>
-      <form hx-post="/panel/telegram/payment-systems/platega" hx-swap="none"
-            hx-on::after-request="handlePsResponse(event, 'pl2')">
-        <div class="mb-2">
-          <label class="form-label">Merchant ID</label>
-          <input type="text" name="platega_merchant_id" class="form-control"
-                 placeholder="UUID" value="{{ ps.platega_merchant_id or '' }}" />
-          <div style="font-size:.7rem;color:var(--text-muted);margin-top:.25rem">UUID формат</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">API Secret</label>
-          <div class="input-group">
-            <input type="password" name="platega_secret" id="pl2-secret" class="form-control"
-                   placeholder="{% if ps.platega_secret_set %}••••••••••••{% else %}Ваш Secret{% endif %}"
-                   autocomplete="new-password" />
-            <button type="button" class="btn btn-outline-secondary" onclick="togglePass('pl2-secret')">
-              <i class="bi bi-eye"></i>
-            </button>
-          </div>
-          {% if ps.platega_configured %}
-          <div style="font-size:.7rem;color:#22c55e;margin-top:.25rem"><i class="bi bi-check-circle me-1"></i>Ключ сохранён. Оставьте пустым чтобы не менять.</div>
-          {% endif %}
-        </div>
-        <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-accent flex-fill"><i class="bi bi-floppy me-1"></i>Сохранить</button>
-          <button type="button" class="btn btn-outline-secondary"
-                  hx-post="/panel/telegram/payment-systems/platega/test" hx-swap="none"
-                  hx-on::after-request="handlePsResponse(event, 'pl2-test')">
-            <i class="bi bi-lightning me-1"></i>Проверить
-          </button>
-        </div>
-      </form>
-      <div id="pl2-result" class="mt-2" style="font-size:.8rem"></div>
-    </div>
-  </div>
-
   <!-- Статус всех систем -->
   <div class="col-12">
     <div class="card p-3">
@@ -329,30 +273,6 @@
           </div>
         </div>
         <button type="submit" class="btn btn-accent btn-sm mt-3"><i class="bi bi-floppy me-1"></i>Сохранить</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- CryptoBot token -->
-  <div class="col-12">
-    <div class="card p-3">
-      <div class="fw-semibold" style="color:var(--text)" mb-3"><i class="bi bi-currency-bitcoin me-2 text-muted"></i>CryptoBot (оплата криптовалютой)</div>
-      <form hx-post="/panel/telegram/bot-settings" hx-swap="none" hx-on::after-request="showToast('Сохранено', 'success')">
-        <div class="d-flex gap-3 flex-wrap align-items-end">
-          <div style="flex:1;min-width:260px">
-            <label class="form-label">API Token</label>
-            <input type="text" name="cryptobot_token" class="form-control font-monospace"
-              placeholder="Получить у @CryptoBot → /pay"
-              value="{{ bot_settings.get('cryptobot_token','') }}" />
-            <div style="font-size:.7rem;color:var(--text-muted);margin-top:.25rem">
-              Получить токен: <a href="https://t.me/CryptoBot" target="_blank" style="color:#00d4aa">@CryptoBot</a> → /pay → Create App
-              {% if bot_settings.get('cryptobot_token') %}
-              <span style="color:#22c55e;margin-left:.5rem"><i class="bi bi-check-circle-fill"></i> Активно</span>
-              {% endif %}
-            </div>
-          </div>
-          <button type="submit" class="btn btn-accent"><i class="bi bi-floppy me-1"></i>Сохранить</button>
-        </div>
       </form>
     </div>
   </div>
