@@ -13,6 +13,7 @@ class MarzbanClient:
     _token: Optional[str] = None
     _token_expires: Optional[datetime] = None
     _lock = asyncio.Lock()
+    _session: Optional[AsyncClient] = None
 
     def __init__(self) -> None:
         cfg = config.pasarguard
@@ -32,9 +33,15 @@ class MarzbanClient:
             if cfg.pasarguard_api_key
             else None
         )
+        self._timeout = 15
+
+    @property
+    def _client(self) -> AsyncClient:
+        if MarzbanClient._session is None:
+            MarzbanClient._session = AsyncClient(timeout=self._timeout, verify=True)
+        return MarzbanClient._session
 
     async def _get_token(self) -> str:
-        """OAuth2 password flow — получаем Bearer token."""
         async with self._lock:
             now = datetime.now(timezone.utc)
             if self._token and self._token_expires and now < self._token_expires:
@@ -43,123 +50,64 @@ class MarzbanClient:
             if not self._login or not self._password:
                 raise PasarguardAuthError("Marzban login/password not configured")
 
-            async with AsyncClient(timeout=15, verify=True) as client:
-                resp = await client.post(
-                    f"{self._base}/api/admin/token",
-                    data={"username": self._login, "password": self._password},
+            resp = await self._client.post(
+                f"{self._base}/api/admin/token",
+                data={"username": self._login, "password": self._password},
+            )
+            if resp.status_code != 200:
+                log.warning(
+                    f"Marzban auth failed: {resp.status_code} {resp.text[:200]}"
                 )
-                if resp.status_code != 200:
-                    log.warning(
-                        f"Marzban auth failed: {resp.status_code} {resp.text[:200]}"
-                    )
-                    raise PasarguardAuthError(
-                        f"Marzban auth failed: {resp.status_code} {resp.text[:200]}"
-                    )
-                data = resp.json()
-                self._token = data["access_token"]
-                self._token_expires = now + timedelta(hours=23)
-                log.info("✅ Marzban token refreshed")
-                return self._token
+                raise PasarguardAuthError(
+                    f"Marzban auth failed: {resp.status_code} {resp.text[:200]}"
+                )
+            data = resp.json()
+            self._token = data["access_token"]
+            expires_in = data.get("expires_in", 82800)
+            self._token_expires = now + timedelta(seconds=expires_in - 60)
+            log.info("✅ Marzban token refreshed")
+            return self._token
 
     async def _headers(self) -> dict:
         token = await self._get_token()
         return {"Authorization": f"Bearer {token}"}
 
-    async def _headers_force_refresh(self) -> dict:
-        """Force token refresh — used after 401."""
-        async with self._lock:
-            MarzbanClient._token = None
-            MarzbanClient._token_expires = None
-        return await self._headers()
+    async def _request(self, method: str, path: str, **kwargs) -> dict | None:
+        url = f"{self._base}{path}"
+        for attempt in range(2):
+            try:
+                resp = await self._client.request(
+                    method, url, headers=await self._headers(), **kwargs
+                )
+                if resp.status_code == 401 and attempt == 0:
+                    async with self._lock:
+                        MarzbanClient._token = None
+                        MarzbanClient._token_expires = None
+                    continue
+                resp.raise_for_status()
+                return resp.json() if resp.content else {}
+            except HTTPStatusError as e:
+                log.warning(f"Marzban {method} {path} → {e.response.status_code}")
+                raise PasarguardRequestError(f"HTTP {e.response.status_code}")
+            except RequestError as e:
+                log.warning(f"Marzban {method} {path} connection error: {e}")
+                raise PasarguardRequestError(f"Connection error: {e}")
+            except Exception as e:
+                log.warning(f"Marzban {method} {path} unexpected error: {e}")
+                raise PasarguardRequestError(f"Unexpected error: {e}")
+        raise PasarguardRequestError("Max retries exceeded")
 
     async def get(self, path: str, params: dict = None) -> dict:
-        url = f"{self._base}{path}"
-        try:
-            async with AsyncClient(timeout=15, verify=True) as client:
-                resp = await client.get(
-                    url, headers=await self._headers(), params=params
-                )
-                if resp.status_code == 401:
-                    resp = await client.get(
-                        url, headers=await self._headers_force_refresh(), params=params
-                    )
-                resp.raise_for_status()
-                return resp.json()
-        except HTTPStatusError as e:
-            log.warning(f"Marzban GET {path} → {e.response.status_code}")
-            raise PasarguardRequestError(f"HTTP {e.response.status_code}")
-        except RequestError as e:
-            log.warning(f"Marzban GET {path} connection error: {e}")
-            raise PasarguardRequestError(f"Connection error: {e}")
-        except Exception as e:
-            log.warning(f"Marzban GET {path} unexpected error: {e}")
-            raise PasarguardRequestError(f"Unexpected error: {e}")
+        return await self._request("GET", path, params=params)
 
     async def post(self, path: str, payload: dict = None) -> dict:
-        url = f"{self._base}{path}"
-        try:
-            async with AsyncClient(timeout=15, verify=True) as client:
-                resp = await client.post(
-                    url, headers=await self._headers(), json=payload or {}
-                )
-                if resp.status_code == 401:
-                    resp = await client.post(
-                        url,
-                        headers=await self._headers_force_refresh(),
-                        json=payload or {},
-                    )
-                resp.raise_for_status()
-                return resp.json() if resp.content else {}
-        except HTTPStatusError as e:
-            log.warning(
-                f"Marzban POST {path} → {e.response.status_code}: {e.response.text[:200]}"
-            )
-            raise PasarguardRequestError(
-                f"HTTP {e.response.status_code}: {e.response.text[:200]}"
-            )
-        except RequestError as e:
-            log.warning(f"Marzban POST {path} connection error: {e}")
-            raise PasarguardRequestError(f"Connection error: {e}")
-        except Exception as e:
-            log.warning(f"Marzban POST {path} unexpected error: {e}")
-            raise PasarguardRequestError(f"Unexpected error: {e}")
+        return await self._request("POST", path, json=payload or {})
 
     async def put(self, path: str, payload: dict = None) -> dict:
-        url = f"{self._base}{path}"
-        try:
-            async with AsyncClient(timeout=15, verify=True) as client:
-                resp = await client.put(
-                    url, headers=await self._headers(), json=payload or {}
-                )
-                if resp.status_code == 401:
-                    resp = await client.put(
-                        url,
-                        headers=await self._headers_force_refresh(),
-                        json=payload or {},
-                    )
-                resp.raise_for_status()
-                return resp.json() if resp.content else {}
-        except HTTPStatusError as e:
-            raise PasarguardRequestError(
-                f"HTTP {e.response.status_code}: {e.response.text}"
-            )
-        except RequestError as e:
-            raise PasarguardRequestError(f"Connection error: {e}")
+        return await self._request("PUT", path, json=payload or {})
 
     async def delete(self, path: str) -> None:
-        url = f"{self._base}{path}"
-        try:
-            async with AsyncClient(timeout=15, verify=True) as client:
-                resp = await client.delete(url, headers=await self._headers())
-                if resp.status_code == 401:
-                    resp = await client.delete(
-                        url, headers=await self._headers_force_refresh()
-                    )
-                resp.raise_for_status()
-        except HTTPStatusError as e:
-            raise PasarguardRequestError(f"HTTP {e.response.status_code}")
-        except RequestError as e:
-            raise PasarguardRequestError(f"Connection error: {e}")
+        await self._request("DELETE", path)
 
 
 class PasarguardService(VpnPanelInterface):

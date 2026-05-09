@@ -42,6 +42,8 @@ class VpnKey(Base):
         nullable=False,
         index=True,
     )
+    download = Column(BigInteger, default=0, nullable=False, server_default='0')
+    upload = Column(BigInteger, default=0, nullable=False, server_default='0')
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     user = relationship("User", back_populates="vpn_keys")
