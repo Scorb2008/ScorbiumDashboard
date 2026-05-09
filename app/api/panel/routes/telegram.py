@@ -32,31 +32,65 @@ async def telegram_page(request: Request, db: AsyncSession = Depends(get_db)):
     ctx = await _base_ctx(request, db, "telegram")
     ctx["bot_info"] = await TelegramNotifyService().get_bot_info()
     ctx["admin_ids"] = config.telegram.telegram_admin_ids
-    ctx["bot_settings"] = await BotSettingsService(db).get_all()
+
+    svc = BotSettingsService(db)
+    settings = await svc.get_all()
+    ctx["bot_settings"] = settings
 
     ctx["all_buttons"] = _ALL_BUTTONS
     ctx["default_layout"] = _DEFAULT_LAYOUT
-    raw = await BotSettingsService(db).get("keyboard_layout")
+    raw = await svc.get("keyboard_layout")
     try:
         ctx["layout"] = _json.loads(raw) if raw else _DEFAULT_LAYOUT
     except Exception:
         ctx["layout"] = _DEFAULT_LAYOUT
 
-    svc = BotSettingsService(db)
-    yk_shop = await svc.get("yookassa_shop_id_override") or ""
-    yk_key_set = bool(await svc.get("yookassa_secret_key_override"))
-    cb_token_set = bool((await svc.get("cryptobot_token") or "").strip())
+    yk_shop = (await svc.get("yookassa_shop_id_override") or "").strip()
+    yk_secret = (await svc.get("yookassa_secret_key_override") or "").strip()
+    cb_token = (await svc.get("cryptobot_token") or "").strip()
+    fk_shop = (await svc.get("freekassa_shop_id") or "").strip()
+    fk_api_key = (await svc.get("freekassa_api_key") or "").strip()
+    ak_shop = (await svc.get("aikassa_shop_id") or "").strip()
+    pg_merchant = (await svc.get("platega_merchant_id") or "").strip()
+    pg_secret = (await svc.get("platega_secret") or "").strip()
+    pp_token = (await svc.get("paypalych_api_token") or "").strip()
+    fk_secret1 = (await svc.get("freekassa_secret_word_1") or "").strip()
+    fk_secret2 = (await svc.get("freekassa_secret_word_2") or "").strip()
 
-    ctx["ps_yookassa_configured"] = bool(yk_shop and yk_key_set)
-    ctx["ps_cryptobot_configured"] = cb_token_set
-    ctx["ps_stars_enabled"] = (await svc.get("ps_stars_enabled") or "0") == "1"
-    ctx["ps_freekassa_configured"] = bool(
-        (await svc.get("freekassa_shop_id") or "").strip()
-        and (await svc.get("freekassa_api_key") or "").strip()
-    )
-    ctx["ps_aikassa_configured"] = bool((await svc.get("aikassa_shop_id") or "").strip())
-    ctx["ps_platega_configured"] = bool((await svc.get("platega_merchant_id") or "").strip())
-    ctx["ps_paypalych_configured"] = bool((await svc.get("paypalych_api_token") or "").strip())
+    def _toggle(key):
+        return settings.get(key) == "1"
+
+    ctx["ps"] = {
+        "platega_enabled": _toggle("ps_platega_enabled"),
+        "platega_configured": bool(pg_merchant),
+        "platega_toggle": _toggle("ps_platega_enabled"),
+        "platega_merchant_id": pg_merchant,
+        "platega_secret_set": bool(pg_secret),
+        "yookassa_enabled": _toggle("ps_yookassa_enabled"),
+        "yookassa_configured": bool(yk_shop and yk_secret),
+        "yookassa_toggle": _toggle("ps_yookassa_enabled"),
+        "yookassa_shop_id": yk_shop,
+        "yookassa_secret_set": bool(yk_secret),
+        "freekassa_enabled": _toggle("ps_freekassa_enabled"),
+        "freekassa_configured": bool(fk_shop and fk_api_key),
+        "freekassa_shop_id": fk_shop,
+        "freekassa_secret1_set": bool(fk_secret1),
+        "freekassa_secret2_set": bool(fk_secret2),
+        "aikassa_enabled": _toggle("ps_aikassa_enabled"),
+        "aikassa_configured": bool(ak_shop),
+        "aikassa_shop_id": ak_shop,
+        "paypalych_enabled": _toggle("ps_paypalych_enabled"),
+        "paypalych_configured": bool(pp_token),
+        "paypalych_toggle": _toggle("ps_paypalych_enabled"),
+        "paypalych_merchant_id": "",
+        "paypalych_secret_set": bool(pp_token),
+        "cryptobot_enabled": _toggle("ps_cryptobot_enabled"),
+        "cryptobot_configured": bool(cb_token),
+        "cryptobot_toggle": _toggle("ps_cryptobot_enabled"),
+        "stars_enabled": _toggle("ps_stars_enabled"),
+        "stars_configured": True,
+        "sbp_enabled": _toggle("ps_sbp_enabled"),
+    }
 
     return templates.TemplateResponse("telegram.html", ctx)
 
