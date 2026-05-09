@@ -4,8 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}{{ app_name | default('VPN Panel') }}{% endblock %}</title>
-  <link rel="shortcut icon" href="/static/img/favicon.ico" type="image/x-icon" />
-  <link rel="icon" href="/static/img/favicon.ico" type="image/x-icon" />
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg" />
+  <link rel="shortcut icon" href="/static/img/logo.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -745,7 +745,7 @@
   // ── Browser Notifications ──
   function sendBrowserNotification(body) {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Scorbium Panel', { body, icon: '/static/img/logo.png', badge: '/static/img/logo.png' });
+      new Notification('Scorbium Panel', { body, icon: '/static/img/logo.svg', badge: '/static/img/logo.svg' });
     }
   }
 
@@ -761,7 +761,7 @@
     Notification.requestPermission().then(perm => {
       if (perm === 'granted') {
         showToast('Уведомления включены!', 'success');
-        new Notification('Scorbium Panel', { body: 'Уведомления панели работают!', icon: '/static/img/logo.png' });
+        new Notification('Scorbium Panel', { body: 'Уведомления панели работают!', icon: '/static/img/logo.svg' });
       } else {
         showToast('Уведомления заблокированы', 'error');
       }
