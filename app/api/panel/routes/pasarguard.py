@@ -46,6 +46,21 @@ async def pg_users(request: Request):
     if not users:
         return HTMLResponse('<div class="text-center py-4" style="color:#8892a4">Пользователей нет</div>')
 
+    from datetime import datetime as _dt
+
+    def _fmt_date(d):
+        if not d or d == "—":
+            return "—"
+        try:
+            if isinstance(d, str):
+                d = d.replace("Z", "+00:00")
+                dt = _dt.fromisoformat(d)
+            else:
+                dt = _dt.fromtimestamp(d)
+            return dt.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            return str(d)
+
     rows = ""
     for u in users:
         status = u.get("status", "")
@@ -55,22 +70,27 @@ async def pg_users(request: Request):
         limit = u.get("data_limit", 0) or 0
         limit_str = f"{round(limit / 1073741824, 1)} GB" if limit else "∞"
         username = html.escape(str(u.get("username", "")))
-        expire = html.escape(str(u.get("expire", "—") or "—"))
-        rows += f"""<div class="user-row">
+        expire = _fmt_date(u.get("expire"))
+        created = _fmt_date(u.get("created_at"))
+        traffic_color = "#22c55e" if limit == 0 or used < limit * 0.8 else ("#eab308" if used < limit else "#ef4444")
+        rows += f"""<div class="user-row" style="gap:.5rem;padding:.5rem .75rem">
           <div style="flex:1;min-width:0">
-            <code style="color:var(--accent);font-size:.85rem">{username}</code>
-            <div style="font-size:.7rem;color:#8892a4;margin-top:.15rem">{used} GB / {limit_str}</div>
-          </div>
-          <div class="text-end" style="flex-shrink:0">
-            <div style="display:flex;align-items:center;gap:.4rem">
-              <span class="status-dot {dot_class}"></span>
-              <span style="font-size:.75rem;color:var(--text-muted)">{status_label}</span>
+            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+              <span class="status-dot {dot_class}" style="flex-shrink:0"></span>
+              <code style="color:var(--accent);font-size:.82rem">{username}</code>
+              <span style="font-size:.7rem;color:{traffic_color};font-weight:600">{used} GB <span style="color:#8892a4;font-weight:400">/ {limit_str}</span></span>
             </div>
-            <div style="font-size:.7rem;color:#8892a4;margin-top:.2rem">{expire}</div>
+          </div>
+          <div class="text-end" style="flex-shrink:0;min-width:130px">
+            <div style="font-size:.72rem;color:var(--text-muted)">
+              {status_label}
+              <span style="color:#8892a4;margin-left:.4rem">до {expire}</span>
+            </div>
+            <div style="font-size:.65rem;color:#5a6478;margin-top:.1rem">с {created}</div>
           </div>
         </div>"""
 
-    return HTMLResponse(f'<div class="p-2">{rows}</div>')
+    return HTMLResponse(f'<div class="p-1">{rows}</div>')
 
 
 @router.get("/groups", response_class=HTMLResponse)

@@ -45,7 +45,7 @@ async def create_promo(
     )
     await db.commit()
     resp = templates.TemplateResponse(
-        "partials/promos_list.html",
+        "partials/promos_table.html",
         {"request": request, "promos": await PromoService(db).get_all()},
     )
     _toast(resp, f"Промокод {code} создан")
