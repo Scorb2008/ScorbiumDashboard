@@ -1,6 +1,3 @@
-// Scorbium Mini App - Production Ready
-// Fixed: initData handling, session, avatar
-
 class MiniApp {
   constructor() {
     this.apiBase = '/app';
@@ -12,18 +9,16 @@ class MiniApp {
     this.isOnline = true;
     this.currentScreen = 'home';
     this.userPhotoUrl = this.initDataUnsafe?.user?.photo_url || '';
+    this.embedded = window.APP_INIT_DATA || null;
 
     this.init();
   }
 
   async init() {
-    // Simple init - WebApp is usually ready when script runs
     if (window.Telegram?.WebApp) {
-      // Call ready immediately (safe to call multiple times)
       window.Telegram.WebApp.ready();
       window.Telegram.WebApp.expand();
-      
-      // Get initData (may be empty if opened via direct link)
+
       this.initData = window.Telegram.WebApp.initData || '';
       this.initDataUnsafe = window.Telegram.WebApp.initDataUnsafe || {};
       this.userPhotoUrl = this.initDataUnsafe?.user?.photo_url || '';
@@ -39,14 +34,21 @@ class MiniApp {
       this.showToast('Ошибка приложения. Попробуйте обновить.', 'err');
     });
 
-    if (!this.initData) {
+    if (this.embedded && this.embedded.user) {
+      this.user = this.embedded.user;
+      if (this.user.is_admin) {
+        const el = document.getElementById('n-admin');
+        if (el) el.style.display = 'block';
+      }
+      this.loadHome();
+    } else if (this.initData) {
+      const authOk = await this.auth();
+      if (authOk) {
+        this.loadHome();
+      }
+    } else {
       this.showError('Перезайдите в приложение через бота');
       return;
-    }
-
-    const authOk = await this.auth();
-    if (authOk) {
-      this.loadHome();
     }
     this.bindEvents();
   }
@@ -163,6 +165,17 @@ class MiniApp {
     try {
       this.showLoading('home-c');
 
+      if (this.embedded) {
+        this.renderHome({
+          user: this.embedded.user,
+          plans: this.embedded.plans || [],
+          settings: this.embedded.settings || {},
+          servers: this.embedded.servers?.servers || [],
+          overall: this.embedded.servers?.overall || 'unknown',
+        });
+        return;
+      }
+
       const [profile, plans, settings, servers] = await Promise.all([
         this.api('/profile'),
         this.api('/plans'),
@@ -230,37 +243,51 @@ class MiniApp {
     this.currentScreen = 'subs';
     try {
       this.showLoading('subs-c');
+
+      if (this.embedded && this.embedded.subscriptions) {
+        this.renderSubs(this.embedded.subscriptions);
+        return;
+      }
+
       const resp = await this.api('/profile');
 
       if (!resp.ok) throw new Error('Load failed');
 
-      const c = document.getElementById('subs-c');
-      if (resp.active_keys && resp.active_keys.length) {
-        c.innerHTML = resp.active_keys.map(k => `
-          <div class="kc active-key">
-            <div class="kn">${k.name}</div>
-            <div class="ke">Действует до ${k.expires_at ? new Date(k.expires_at).toLocaleDateString('ru') : '—'}</div>
-            <div class="ku" onclick="app.copyKey('${k.access_url}')">🔗 Копировать ключ</div>
-            <div class="db"><div class="df" style="width:100%"></div></div>
-          </div>
-        `).join('') + `
-          <div class="pc" onclick="app.go('buy')">
-            <div class="pn">🔄 Продлить подписку</div>
-          </div>
-        `;
-      } else {
-        c.innerHTML = `
-          <div class="em">
-            <div class="ei">🔑</div>
-            <div class="em-title">У вас нет активных подписок</div>
-            <div class="em-sub">Купите тариф для получения VPN-ключа</div>
-            <button class="btn bp" onclick="app.go('buy')">💳 Купить подписку</button>
-          </div>
-        `;
-      }
+      this.renderSubs({
+        active_keys: resp.active_keys || [],
+        archive_keys: resp.archive_keys || [],
+      });
 
     } catch (e) {
       this.renderError('subs-c', 'Не удалось загрузить подписки');
+    }
+  }
+
+  renderSubs(data) {
+    const c = document.getElementById('subs-c');
+    const keys = data.active_keys || [];
+    if (keys.length) {
+      c.innerHTML = keys.map(k => `
+        <div class="kc active-key">
+          <div class="kn">${k.name}</div>
+          <div class="ke">Действует до ${k.expires_at ? new Date(k.expires_at).toLocaleDateString('ru') : '—'}</div>
+          <div class="ku" onclick="app.copyKey('${k.access_url}')">🔗 Копировать ключ</div>
+          <div class="db"><div class="df" style="width:100%"></div></div>
+        </div>
+      `).join('') + `
+        <div class="pc" onclick="app.go('buy')">
+          <div class="pn">🔄 Продлить подписку</div>
+        </div>
+      `;
+    } else {
+      c.innerHTML = `
+        <div class="em">
+          <div class="ei">🔑</div>
+          <div class="em-title">У вас нет активных подписок</div>
+          <div class="em-sub">Купите тариф для получения VPN-ключа</div>
+          <button class="btn bp" onclick="app.go('buy')">💳 Купить подписку</button>
+        </div>
+      `;
     }
   }
 
@@ -268,6 +295,12 @@ class MiniApp {
     this.currentScreen = 'buy';
     try {
       this.showLoading('buy-c');
+
+      if (this.embedded) {
+        this.renderBuy(this.embedded.plans || [], this.embedded.settings || {});
+        return;
+      }
+
       const [plans, settings] = await Promise.all([
         this.api('/plans'),
         this.api('/settings')
@@ -275,52 +308,65 @@ class MiniApp {
 
       if (!plans.ok || !settings.ok) throw new Error('Load failed');
 
-      const c = document.getElementById('buy-c');
-      const ps = settings;
-      c.innerHTML = `
-        ${ps.has_yookassa ? `<div class="pb" onclick="app.buyWithYookassa()">
-          <div class="pb-icon" style="background:linear-gradient(135deg,#00d4aa,#0ea5e9)">💳</div>
-          ЮKassa (карта, СБП)
-        </div>` : ''}
-
-        ${ps.has_freekassa ? `<div class="pb" onclick="app.buyWithFreeKassa()">
-          <div class="pb-icon" style="background:#6b7280">🏦</div>
-          FreeKassa
-        </div>` : ''}
-
-        ${ps.has_cryptobot ? `<div class="pb" onclick="app.buyWithCrypto()">
-          <div class="pb-icon" style="background:linear-gradient(135deg,#f59e0b,#eab308)">₿</div>
-          Криптовалюта
-        </div>` : ''}
-
-        ${ps.has_stars ? `<div class="pb" onclick="app.payStars()">
-          <div class="pb-icon" style="background:#00d4aa">⭐</div>
-          Telegram Stars
-        </div>` : ''}
-
-        <div class="div"></div>
-        <button class="btn bo" onclick="app.openPromo()">🎁 Промокод</button>
-
-        <div class="div"></div>
-        <div class="sl2">Выберите тариф</div>
-        ${(plans.plans || []).map(p => `
-          <div class="pc" onclick="app.buyPlan(${p.id}, '${p.name.replace(/'/g, "\\'")}', ${p.price}, ${p.duration_days})">
-            <div class="pn">${p.name}</div>
-            <div class="pp">${p.price} ₽</div>
-            <div class="pd">${p.duration_days} дней</div>
-          </div>
-        `).join('')}
-      `;
+      this.renderBuy(plans.plans || [], settings);
 
     } catch (e) {
       this.renderError('buy-c', 'Не удалось загрузить способы оплаты');
     }
   }
 
+  renderBuy(plans, settings) {
+    const c = document.getElementById('buy-c');
+    c.innerHTML = `
+      ${settings.has_yookassa ? `<div class="pb" onclick="app.buyWithYookassa()">
+        <div class="pb-icon" style="background:linear-gradient(135deg,#00d4aa,#0ea5e9)">💳</div>
+        ЮKassa (карта, СБП)
+      </div>` : ''}
+
+      ${settings.has_freekassa ? `<div class="pb" onclick="app.buyWithFreeKassa()">
+        <div class="pb-icon" style="background:#6b7280">🏦</div>
+        FreeKassa
+      </div>` : ''}
+
+      ${settings.has_cryptobot ? `<div class="pb" onclick="app.buyWithCrypto()">
+        <div class="pb-icon" style="background:linear-gradient(135deg,#f59e0b,#eab308)">₿</div>
+        Криптовалюта
+      </div>` : ''}
+
+      ${settings.has_stars ? `<div class="pb" onclick="app.payStars()">
+        <div class="pb-icon" style="background:#00d4aa">⭐</div>
+        Telegram Stars
+      </div>` : ''}
+
+      <div class="div"></div>
+      <button class="btn bo" onclick="app.openPromo()">🎁 Промокод</button>
+
+      <div class="div"></div>
+      <div class="sl2">Выберите тариф</div>
+      ${(plans || []).map(p => `
+        <div class="pc" onclick="app.buyPlan(${p.id}, '${p.name.replace(/'/g, "\\'")}', ${p.price}, ${p.duration_days})">
+          <div class="pn">${p.name}</div>
+          <div class="pp">${p.price} ₽</div>
+          <div class="pd">${p.duration_days} дней</div>
+        </div>
+      `).join('')}
+    `;
+  }
+
   async loadProfile() {
     this.currentScreen = 'profile';
     try {
       this.showLoading('profile-c');
+
+      if (this.embedded) {
+        this.renderProfile(
+          { user: this.embedded.user },
+          { stats: this.embedded.stats },
+          { payments: [] }
+        );
+        return;
+      }
+
       const [profile, stats, payments] = await Promise.all([
         this.api('/profile'),
         this.api('/user/stats'),
@@ -329,104 +375,118 @@ class MiniApp {
 
       if (!profile.ok || !stats.ok) throw new Error('Load failed');
 
-      const pmts = payments?.payments || [];
-      const pmtsHtml = pmts.length ? pmts.map(p => {
-        const statusColor = p.status === 'succeeded' ? '#22c55e' : p.status === 'pending' ? '#eab308' : '#ef4444';
-        const statusIcon = p.status === 'succeeded' ? '✅' : p.status === 'pending' ? '⏳' : '❌';
-        return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--br)">
-          <span style="font-size:13px">${statusIcon} ${parseFloat(p.amount).toFixed(2)} ₽</span>
-          <span style="font-size:12px;color:var(--hi)">${p.provider || '—'}</span>
-          <span style="font-size:12px;color:${statusColor}">${p.status}</span>
-        </div>`;
-      }).join('') : '<div style="font-size:13px;color:var(--hi);text-align:center;padding:12px">Нет платежей</div>';
-
-      const c = document.getElementById('profile-c');
-      const avatarContent = this.userPhotoUrl
-        ? `<img src="${this.userPhotoUrl}" alt="avatar" onerror="this.style.display='none'">`
-        : (profile.user.full_name?.[0] || '@');
-
-      c.innerHTML = `
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
-          <div class="av">${avatarContent}</div>
-          <div>
-            <div style="font-size:20px;font-weight:800">${profile.user.full_name}</div>
-            <div style="font-size:13px;color:var(--hi)">@${profile.user.username || 'user'}</div>
-          </div>
-        </div>
-
-        <div class="stats-grid">
-          <div class="stat-item">
-            <div class="stat-val">${(stats.stats?.balance || 0).toFixed(2)} ₽</div>
-            <div class="stat-lbl">Баланс</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-val">${stats.stats?.active_keys || 0}</div>
-            <div class="stat-lbl">Активных ключей</div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top:12px">
-          <div style="font-size:14px;font-weight:700;margin-bottom:8px">💳 Последние платежи</div>
-          ${pmtsHtml}
-        </div>
-
-        <div style="font-size:12px;color:var(--hi);text-align:center;margin:24px 0">
-          Реферальный код: <code style="background:var(--bg3);padding:4px 8px;border-radius:6px">${profile.user.referral_code || '—'}</code>
-        </div>
-
-        ${this.user?.is_admin ? `
-          <button class="btn bp" onclick="app.go('admin')">👑 Админ панель</button>
-        ` : ''}
-      `;
+      this.renderProfile(profile, stats, payments);
 
     } catch (e) {
       this.renderError('profile-c', 'Не удалось загрузить профиль');
     }
   }
 
+  renderProfile(profile, stats, payments) {
+    const pmts = payments?.payments || [];
+    const pmtsHtml = pmts.length ? pmts.map(p => {
+      const statusColor = p.status === 'succeeded' ? '#22c55e' : p.status === 'pending' ? '#eab308' : '#ef4444';
+      const statusIcon = p.status === 'succeeded' ? '✅' : p.status === 'pending' ? '⏳' : '❌';
+      return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--br)">
+        <span style="font-size:13px">${statusIcon} ${parseFloat(p.amount).toFixed(2)} ₽</span>
+        <span style="font-size:12px;color:var(--hi)">${p.provider || '—'}</span>
+        <span style="font-size:12px;color:${statusColor}">${p.status}</span>
+      </div>`;
+    }).join('') : '<div style="font-size:13px;color:var(--hi);text-align:center;padding:12px">Нет платежей</div>';
+
+    const c = document.getElementById('profile-c');
+    const avatarContent = this.userPhotoUrl
+      ? `<img src="${this.userPhotoUrl}" alt="avatar" onerror="this.style.display='none'">`
+      : (profile.user.full_name?.[0] || '@');
+
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+        <div class="av">${avatarContent}</div>
+        <div>
+          <div style="font-size:20px;font-weight:800">${profile.user.full_name}</div>
+          <div style="font-size:13px;color:var(--hi)">@${profile.user.username || 'user'}</div>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-val">${(stats.stats?.balance || 0).toFixed(2)} ₽</div>
+          <div class="stat-lbl">Баланс</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-val">${stats.stats?.active_keys || 0}</div>
+          <div class="stat-lbl">Активных ключей</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px">💳 Последние платежи</div>
+        ${pmtsHtml}
+      </div>
+
+      <div style="font-size:12px;color:var(--hi);text-align:center;margin:24px 0">
+        Реферальный код: <code style="background:var(--bg3);padding:4px 8px;border-radius:6px">${profile.user.referral_code || '—'}</code>
+      </div>
+
+      ${this.user?.is_admin ? `
+        <button class="btn bp" onclick="app.go('admin')">👑 Админ панель</button>
+      ` : ''}
+    `;
+  }
+
   async loadHelp() {
     this.currentScreen = 'help';
     try {
       this.showLoading('help-c');
+
+      if (this.embedded && this.embedded.faq) {
+        this.renderHelp(this.embedded.faq);
+        return;
+      }
+
       const faq = await this.api('/faq');
+      this.renderHelp(faq);
 
-      const c = document.getElementById('help-c');
-      c.innerHTML = `
-        <div style="text-align:center;margin-bottom:24px">
-          <div style="font-size:28px;margin-bottom:8px">❓</div>
-          <div style="font-size:18px;font-weight:700;margin-bottom:12px">Помощь и FAQ</div>
-          ${faq.about ? `<div style="font-size:13px;color:var(--hi)">${faq.about}</div>` : ''}
-        </div>
-
-        <div class="faq-item" onclick="toggleFaq(this)">
-          <div class="faq-q">
-            Как подключить VPN?
-            <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-          <div class="faq-a">1. Скопируйте ссылку из «Подписки»<br>2. Откройте V2Ray/Outline/Nekobox<br>3. Импортируйте ссылку</div>
-        </div>
-
-        <div class="faq-item" onclick="toggleFaq(this)">
-          <div class="faq-q">
-            Сколько устройств?
-            <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-          <div class="faq-a">Неограниченно! Один ключ = все устройства</div>
-        </div>
-
-        <div class="faq-item" onclick="toggleFaq(this)">
-          <div class="faq-q">
-            Пополнить баланс?
-            <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-          <div class="faq-a">Купите тариф -> средства зачислятся автоматически</div>
-        </div>
-
-        <button class="btn bo" onclick="app.go('profile')" style="margin-top:24px">👤 Профиль</button>
-      `;
     } catch (e) {
       this.renderError('help-c', 'Не удалось загрузить помощь');
     }
+  }
+
+  renderHelp(faq) {
+    const c = document.getElementById('help-c');
+    c.innerHTML = `
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:28px;margin-bottom:8px">❓</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:12px">Помощь и FAQ</div>
+        ${faq.about ? `<div style="font-size:13px;color:var(--hi)">${faq.about}</div>` : ''}
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-q">
+          Как подключить VPN?
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">1. Скопируйте ссылку из «Подписки»<br>2. Откройте V2Ray/Outline/Nekobox<br>3. Импортируйте ссылку</div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-q">
+          Сколько устройств?
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">Неограниченно! Один ключ = все устройства</div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-q">
+          Пополнить баланс?
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">Купите тариф -> средства зачислятся автоматически</div>
+      </div>
+
+      <button class="btn bo" onclick="app.go('profile')" style="margin-top:24px">👤 Профиль</button>
+    `;
   }
 
   async loadAdmin() {
@@ -464,7 +524,6 @@ class MiniApp {
     }
   }
 
-  // Navigation
   go(screen) {
     document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
     const target = document.getElementById(`s-${screen}`);
@@ -482,10 +541,9 @@ class MiniApp {
     else if (screen === 'admin') this.loadAdmin();
   }
 
-  // Payments
   async buyPlan(planId, name, price, days) {
     try {
-      const settings = await this.api('/settings');
+      const settings = this.embedded?.settings || await this.api('/settings');
       if (!settings.has_yookassa) {
         this.showToast('Платежная система не настроена', 'err');
         return;
@@ -515,30 +573,30 @@ class MiniApp {
   }
 
   async buyWithYookassa() {
-    const plansResp = await this.api('/plans');
-    if (!plansResp.ok || !plansResp.plans || !plansResp.plans.length) {
+    const plans = this.embedded?.plans || (await this.api('/plans')).plans || [];
+    if (!plans.length) {
       this.showToast('Нет доступных тарифов', 'err');
       return;
     }
-    this.showPlanSelector(plansResp.plans, (plan) => this.buyPlan(plan.id, plan.name, plan.price, plan.duration_days));
+    this.showPlanSelector(plans, (plan) => this.buyPlan(plan.id, plan.name, plan.price, plan.duration_days));
   }
 
   async buyWithFreeKassa() {
-    const plansResp = await this.api('/plans');
-    if (!plansResp.ok || !plansResp.plans || !plansResp.plans.length) {
+    const plans = this.embedded?.plans || (await this.api('/plans')).plans || [];
+    if (!plans.length) {
       this.showToast('Нет доступных тарифов', 'err');
       return;
     }
-    this.showPlanSelector(plansResp.plans, (plan) => this.buyPlanFreeKassa(plan.id, plan.name, plan.price, plan.duration_days));
+    this.showPlanSelector(plans, (plan) => this.buyPlanFreeKassa(plan.id, plan.name, plan.price, plan.duration_days));
   }
 
   async buyWithCrypto() {
-    const plansResp = await this.api('/plans');
-    if (!plansResp.ok || !plansResp.plans || !plansResp.plans.length) {
+    const plans = this.embedded?.plans || (await this.api('/plans')).plans || [];
+    if (!plans.length) {
       this.showToast('Нет доступных тарифов', 'err');
       return;
     }
-    this.showPlanSelector(plansResp.plans, (plan) => this.buyPlanCrypto(plan.id, plan.name, plan.price, plan.duration_days));
+    this.showPlanSelector(plans, (plan) => this.buyPlanCrypto(plan.id, plan.name, plan.price, plan.duration_days));
   }
 
   showPlanSelector(plans, onSelect) {
@@ -621,7 +679,6 @@ class MiniApp {
     }
   }
 
-  // UI Helpers
   showLoading(id, block = false) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -694,10 +751,8 @@ class MiniApp {
   }
 }
 
-// Global app instance
 const app = new MiniApp();
 
-// Global navigation function (called from HTML onclick)
 function go(screen) {
   app.go(screen);
 }

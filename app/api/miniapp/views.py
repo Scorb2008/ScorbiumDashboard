@@ -149,6 +149,133 @@ async def miniapp_debug(request: Request, db: AsyncSession = Depends(get_db)):
 async def miniapp_index(request: Request, db: AsyncSession = Depends(get_db)):
     from app.core.config import config as _cfg
     settings = await BotSettingsService(db).get_all()
+
+    embed = {}
+    init_data = request.headers.get("X-Telegram-Init-Data", "") or request.headers.get("x-telegram-init-data", "")
+    if init_data:
+        tg_user = await _verify_telegram_data(init_data, db)
+        if tg_user:
+            user_id = tg_user["id"]
+            try:
+                user_obj, _ = await UserService(db).get_or_create(
+                    UserCreate(
+                        id=user_id,
+                        username=tg_user.get("username"),
+                        full_name=f"{tg_user.get('first_name', '')} {tg_user.get('last_name', '')}".strip(),
+                    )
+                )
+                await db.flush()
+            except Exception:
+                user_obj = None
+
+            if user_obj:
+                keys = await VpnKeyService(db).get_all_for_user(user_id)
+                ref_count = await ReferralService(db).count_referrals(user_id)
+                plans = await PlanService(db).get_all(only_active=True)
+
+                active_keys, archive_keys = [], []
+                for k in keys:
+                    status = str(k.status.value if hasattr(k.status, "value") else k.status)
+                    key_data = {
+                        "id": k.id, "name": k.name or f"Subscription #{k.id}",
+                        "status": status, "expires_at": k.expires_at.isoformat() if k.expires_at else None,
+                        "access_url": k.access_url if status == "active" else None,
+                        "price": float(k.price or 0),
+                    }
+                    (active_keys if status == "active" else archive_keys).append(key_data)
+
+                active_count = expired_count = 0
+                total_spent = 0.0
+                for k in keys:
+                    s = str(k.status.value if hasattr(k.status, "value") else k.status)
+                    if s == "active":
+                        active_count += 1
+                    else:
+                        expired_count += 1
+                    total_spent += float(k.price or 0)
+
+                import time as _time
+                start = _time.time()
+                try:
+                    from sqlalchemy import text
+                    await db.execute(text("SELECT 1"))
+                    db_ok = True
+                except Exception:
+                    db_ok = False
+                latency_ms = round((_time.time() - start) * 1000, 1)
+                active_key_count = await VpnKeyService(db).count_active()
+
+                yk_ok = bool(_cfg.yookassa.yookassa_shop_id and _cfg.yookassa.yookassa_secret_key) or \
+                         (settings.get("yookassa_shop_id_override") and settings.get("yookassa_secret_key_override"))
+                has_yookassa = settings.get("ps_yookassa_enabled", "0") == "1" and yk_ok
+                has_cryptobot = settings.get("ps_cryptobot_enabled", "0") == "1" and bool(settings.get("cryptobot_token", "").strip())
+                has_stars = settings.get("ps_stars_enabled", "0") == "1"
+                has_freekassa = settings.get("ps_freekassa_enabled", "0") == "1" and bool(settings.get("freekassa_shop_id") and settings.get("freekassa_api_key"))
+                try:
+                    stars_rate = float(settings.get("stars_rate") or "1.5")
+                except (ValueError, TypeError):
+                    stars_rate = 1.5
+
+                bot_username = ""
+                try:
+                    from app.core.server import get_bot
+                    bot = get_bot()
+                    if bot:
+                        me = await bot.get_me()
+                        bot_username = me.username or ""
+                except Exception:
+                    pass
+
+                is_admin = user_obj.id in _cfg.telegram.telegram_admin_ids
+
+                embed = {
+                    "user": {
+                        "id": user_obj.id, "full_name": user_obj.full_name,
+                        "username": user_obj.username, "balance": float(user_obj.balance or 0),
+                        "referral_code": user_obj.referral_code, "is_admin": is_admin,
+                    },
+                    "plans": [{"id": p.id, "name": p.name, "price": float(p.price or 0),
+                               "duration_days": p.duration_days, "description": p.description,
+                               "currency": p.currency} for p in plans],
+                    "settings": {
+                        "lang": settings.get("bot_language", "ru"),
+                        "about_text": settings.get("about_text", ""),
+                        "support_url": settings.get("support_url", ""),
+                        "has_yookassa": has_yookassa, "has_cryptobot": has_cryptobot,
+                        "has_stars": has_stars, "has_freekassa": has_freekassa,
+                        "stars_rate": stars_rate, "bot_username": bot_username,
+                    },
+                    "servers": {
+                        "overall": "operational" if db_ok else "degraded",
+                        "active_keys": active_key_count,
+                        "servers": [
+                            {"name": "Основной EU", "region": "🇩🇪 Германия",
+                             "status": "online" if db_ok else "degraded",
+                             "ping": latency_ms, "load": min(95, max(5, int(latency_ms / 3)))},
+                            {"name": "Резервный US", "region": "🇺🇸 США",
+                             "status": "online", "ping": latency_ms + 15,
+                             "load": min(95, max(5, int((latency_ms + 15) / 3)))},
+                        ],
+                    },
+                    "subscriptions": {"active_keys": active_keys, "archive_keys": archive_keys},
+                    "stats": {
+                        "balance": float(user_obj.balance or 0), "active_keys": active_count,
+                        "expired_keys": expired_count, "total_spent": round(total_spent, 2),
+                        "referrals": ref_count, "referral_code": user_obj.referral_code,
+                    },
+                    "faq": {
+                        "about": settings.get("about_text", ""),
+                        "faq": [
+                            {"q": "Как подключить VPN?", "a": "Скопируйте ключ из раздела «Подписки» и импортируйте в приложение V2Ray/Outline."},
+                            {"q": "Какие устройства поддерживаются?", "a": "iOS, Android, Windows, macOS и Linux."},
+                            {"q": "Сколько устройств можно подключить?", "a": "Один ключ работает на неограниченном количестве устройств."},
+                            {"q": "Как пополнить баланс?", "a": "Перейдите в раздел «Купить» → выберите план → оплатите."},
+                            {"q": "Можно ли вернуть деньги?", "a": "Возврат возможен в течение 24 часов при технических проблемах."},
+                            {"q": "Как работают промокоды?", "a": "Введите код в разделе «Профиль» — получите бонус."},
+                        ],
+                    },
+                }
+
     return templates.TemplateResponse("index.html", {
         "request": request,
         "app_name": _cfg.web.app_name,
@@ -156,6 +283,7 @@ async def miniapp_index(request: Request, db: AsyncSession = Depends(get_db)):
         "about_text": settings.get("about_text", ""),
         "bot_language": settings.get("bot_language", "ru"),
         "panel_url": (settings.get("panel_url") or "").rstrip("/"),
+        "init_data_json": json.dumps(embed, ensure_ascii=False, default=str),
     })
 
 
