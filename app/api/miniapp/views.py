@@ -134,25 +134,26 @@ async def _get_tg_user(request: Request, db=None) -> Optional[dict]:
     return None
 
 
-@router.get("/debug")
+@router.get("/debug", response_class=HTMLResponse)
 async def miniapp_debug(request: Request, db: AsyncSession = Depends(get_db)):
-    """Debug endpoint — shows full initData diagnostics + HMAC comparison."""
-    init_data = request.headers.get("X-Telegram-Init-Data", "") or request.headers.get("x-telegram-init-data", "")
-    body_init = ""
-    if request.method == "POST":
-        try:
-            body = await request.json()
-            body_init = body.get("initData", "")[:200]
-        except Exception:
-            pass
+    """Debug page — shows initData diagnostics + HMAC comparison if available."""
+    init_data = (request.headers.get("X-Telegram-Init-Data", "")
+                 or request.headers.get("x-telegram-init-data", "")
+                 or request.query_params.get("init_data", ""))
 
-    result = {
+    ctx: dict = {
         "has_data": bool(init_data),
         "header_len": len(init_data),
-        "header_preview": init_data[:150],
-        "body_preview": body_init,
-        "body_len": len(body_init),
+        "panel_url": (await BotSettingsService(db).get("panel_url") or "").rstrip("/"),
+        "env_token_preview": config.telegram.telegram_bot_token.get_secret_value()[:24] + "..." if config.telegram.telegram_bot_token.get_secret_value() else "—",
+        "db_token_preview": "",
     }
+
+    try:
+        db_tok = await BotSettingsService(db).get("telegram_bot_token")
+        ctx["db_token_preview"] = db_tok[:24] + "..." if db_tok else "(не задан, используется env)"
+    except Exception:
+        ctx["db_token_preview"] = "—"
 
     if init_data:
         try:
@@ -160,64 +161,59 @@ async def miniapp_debug(request: Request, db: AsyncSession = Depends(get_db)):
             for pair in init_data.split("&"):
                 if "=" in pair:
                     raw_pairs.append(pair.split("=", 1))
-            keys = {k for k, _ in raw_pairs}
-            result["keys"] = sorted(keys)
-            result["key_details"] = {}
-            for k in sorted(keys):
+            keys = sorted({k for k, _ in raw_pairs})
+            ctx["keys"] = keys
+            ctx["key_details"] = {}
+            for k in keys:
                 vals = [v for key, v in raw_pairs if key == k]
-                result["key_details"][k] = {
+                ctx["key_details"][k] = {
                     "count": len(vals),
                     "len": len(vals[0]) if vals else 0,
                     "preview": vals[0][:80] if vals else "",
                 }
 
-            # Show what data_check_string looks like (decoded values)
             data_check_parts = []
             for k, v in sorted(raw_pairs, key=lambda x: x[0]):
                 if k == "hash":
                     continue
                 data_check_parts.append(f"{k}={urllib.parse.unquote(v)}")
             data_check = "\n".join(data_check_parts)
-            result["data_check_preview"] = data_check[:300]
-            result["data_check_len"] = len(data_check)
+            ctx["data_check_preview"] = data_check[:600]
+            ctx["data_check_len"] = len(data_check)
 
-            # Hash from Telegram
             hash_val = None
             for k, v in raw_pairs:
                 if k == "hash":
                     hash_val = v
                     break
-            result["hash_from_telegram"] = hash_val[:40] + "..." if hash_val and len(hash_val) > 40 else (hash_val or "")
+            ctx["hash_from_telegram"] = hash_val
 
-            # Compute HMAC with all available tokens
             tokens = []
             env_token = config.telegram.telegram_bot_token.get_secret_value()
             if env_token:
-                tokens.append(("env_token", env_token[:20] + ("..." if len(env_token) > 20 else ""), env_token))
+                tokens.append(("env_token", env_token[:24] + ("..." if len(env_token) > 24 else ""), env_token))
             if db:
                 try:
                     db_token = await BotSettingsService(db).get("telegram_bot_token")
                     if db_token:
-                        tokens.append(("db_token", db_token[:20] + ("..." if len(db_token) > 20 else ""), db_token))
+                        tokens.append(("db_token", db_token[:24] + ("..." if len(db_token) > 24 else ""), db_token))
                 except Exception:
                     pass
 
-            result["tokens"] = []
+            ctx["tokens"] = []
             for name, display, token in tokens:
                 computed = _compute_hmac(token, data_check)
                 match = "✅ MATCH" if hmac.compare_digest(computed, hash_val) else "❌ MISMATCH"
-                result["tokens"].append({
+                ctx["tokens"].append({
                     "name": name,
                     "display": display,
                     "computed_hash": computed,
                     "match": match,
                 })
         except Exception as e:
-            result["error"] = str(e)
-            import traceback
-            result["traceback"] = traceback.format_exc()
+            ctx["error"] = str(e)
 
-    return JSONResponse(result)
+    return templates.TemplateResponse("debug.html", {"request": request, **ctx})
 
 
 @router.get("", response_class=HTMLResponse)
@@ -371,16 +367,33 @@ async def miniapp_auth(request: Request, db: AsyncSession = Depends(get_db)):
     if not tg_user:
         init_data = request.headers.get("X-Telegram-Init-Data", "") or request.headers.get("x-telegram-init-data", "")
         body_init = ""
+        body_data_check = ""
         if request.method == "POST":
             try:
                 body = await request.json()
-                body_init = body.get("initData", "")[:100]
+                body_init = body.get("initData", "")[:200]
+                body_data_check = body.get("initData", "")[:500]
             except Exception:
                 pass
-        env_token_preview = config.telegram.telegram_bot_token.get_secret_value()[:20] + "..."
-        log.warning(f"Auth failed. Header len: {len(init_data)}, Body preview: {body_init}, "
-                     f"Bot token (env): {env_token_preview}")
-        return JSONResponse({"ok": False, "error": "Invalid auth"}, status_code=401)
+        env_token_preview = config.telegram.telegram_bot_token.get_secret_value()[:24] + "..."
+        db_token_preview = ""
+        try:
+            db_tok = await BotSettingsService(db).get("telegram_bot_token")
+            db_token_preview = db_tok[:24] + "..." if db_tok else "(not set)"
+        except Exception:
+            pass
+        log.warning(f"Auth failed. Header len: {len(init_data)}, Body data_check: {body_data_check}, "
+                     f"Bot token (env): {env_token_preview}, Bot token (db): {db_token_preview}")
+        return JSONResponse({
+            "ok": False, "error": "Invalid auth",
+            "debug": {
+                "header_len": len(init_data),
+                "header_preview": init_data[:100],
+                "body_init_len": len(body_init),
+                "env_token_preview": env_token_preview,
+                "db_token_preview": db_token_preview,
+            }
+        }, status_code=401)
 
     user_id = tg_user.get("id")
     try:
