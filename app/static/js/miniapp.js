@@ -138,14 +138,18 @@ class MiniApp {
     }
 
     try {
-      const resp = await this.api('/auth', {
-        method: 'POST',
-        body: JSON.stringify({ initData: this.initData })
-      });
+      const resp = await this._xhr('POST', `${this.apiBase}/auth`,
+        { 'Content-Type': 'application/json' },
+        JSON.stringify({ initData: this.initData })
+      );
+      if (!resp.ok) {
+        this.showToast('Перезайдите в приложение', 'err');
+        return false;
+      }
 
-      if (resp.ok) {
-        this.user = resp.user;
-        this.token = resp.token || null;
+      if (resp.ok && resp.data?.ok) {
+        this.user = resp.data.user;
+        this.token = resp.data.token || null;
         if (this.user.is_admin) {
           const el = document.getElementById('n-admin');
           if (el) el.style.display = 'block';
