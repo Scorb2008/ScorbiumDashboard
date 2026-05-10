@@ -3,7 +3,7 @@
 
 class MiniApp {
   constructor() {
-    this.apiBase = '/app';
+    this.apiBase = window.location.origin + '/app';
     this.initData = window.Telegram?.WebApp?.initData || '';
     this.initDataUnsafe = window.Telegram?.WebApp?.initDataUnsafe || {};
     this.user = null;
