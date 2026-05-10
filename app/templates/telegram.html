@@ -510,7 +510,7 @@
           </button>
           {% if bot_settings.get(key) %}
           <button type="button" class="btn btn-sm btn-outline-danger"
-            hx-post="/panel/telegram/photo/clear" hx-vals='{"key":"{{ key }}"}' hx-swap="none" hx-on::after-request="location.reload()">
+            hx-post="/panel/telegram/photo/clear" hx-vals='{"photo_type":"{{ key }}"}' hx-swap="none" hx-on::after-request="location.reload()">
             <i class="bi bi-trash"></i>
           </button>
           {% endif %}
@@ -1247,14 +1247,14 @@ async function uploadPhoto(key, input) {
   const file = input.files[0]; if (!file) return;
   const el = document.getElementById('status_' + key);
   el.textContent = '⏳ Загружаю...'; el.style.color = 'var(--text-muted)';
-  const fd = new FormData(); fd.append('key', key); fd.append('photo', file);
+  const fd = new FormData(); fd.append('photo_type', key); fd.append('file', file);
   const meta = document.querySelector('meta[name="csrf-token"]');
   const csrf = meta ? meta.getAttribute('content') : '';
   try {
     const r = await fetch('/panel/telegram/photo/upload', {method:'POST', body:fd, headers:{'X-CSRF-Token':csrf}, credentials:'same-origin'});
     const d = await r.json();
-    if (r.ok && d.file_id) { el.textContent = '✅ Сохранено'; el.style.color = '#22c55e'; setTimeout(() => location.reload(), 700); }
-    else { el.textContent = '❌ ' + (d.detail||'Ошибка'); el.style.color = '#ef4444'; }
+    if (r.ok && d.ok) { el.textContent = '✅ Сохранено'; el.style.color = '#22c55e'; setTimeout(() => location.reload(), 700); }
+    else { el.textContent = '❌ ' + (d.message||d.detail||'Ошибка'); el.style.color = '#ef4444'; }
   } catch(e) { el.textContent = '❌ Ошибка сети'; el.style.color = '#ef4444'; }
   input.value = '';
 }

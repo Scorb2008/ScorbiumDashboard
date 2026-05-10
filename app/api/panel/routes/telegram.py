@@ -564,7 +564,8 @@ async def upload_photo(
 ):
     _require_permission(request, "system")
     allowed = {"photo_welcome", "photo_buy", "photo_my_keys", "photo_balance",
-               "photo_about", "photo_support", "photo_profile", "photo_language"}
+               "photo_about", "photo_support", "photo_profile", "photo_language",
+               "photo_trial", "photo_connect", "photo_referrals", "photo_status"}
     if photo_type not in allowed:
         return JSONResponse({"ok": False, "message": "Invalid photo type"}, status_code=400)
 
@@ -574,7 +575,7 @@ async def upload_photo(
 
     import base64
     b64 = base64.b64encode(content).decode()
-    await BotSettingsService(db).set(f"photo_{photo_type}", b64)
+    await BotSettingsService(db).set(photo_type, b64)
     await db.commit()
     return JSONResponse({"ok": True, "message": "Photo uploaded"})
 
@@ -600,7 +601,12 @@ async def clear_photo(
     db: AsyncSession = Depends(get_db),
 ):
     _require_permission(request, "system")
-    await BotSettingsService(db).set(f"photo_{photo_type}", "")
+    allowed = {"photo_welcome", "photo_buy", "photo_my_keys", "photo_balance",
+               "photo_about", "photo_support", "photo_profile", "photo_language",
+               "photo_trial", "photo_connect", "photo_referrals", "photo_status"}
+    if photo_type not in allowed:
+        return JSONResponse({"ok": False, "message": "Invalid photo type"}, status_code=400)
+    await BotSettingsService(db).set(photo_type, "")
     await db.commit()
     return JSONResponse({"ok": True})
 
