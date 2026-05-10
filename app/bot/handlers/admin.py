@@ -2035,12 +2035,12 @@ async def admin_backup(callback: CallbackQuery) -> None:
                 file_size = os.path.getsize(filepath)
                 size_str = f"{file_size / 1024:.0f} KB" if file_size < 1024*1024 else f"{file_size / (1024*1024):.1f} MB"
 
-                with open(filepath, "rb") as f:
-                    await callback.message.answer_document(
-                        document=f,
-                        caption=f"💾 <b>Бэкап создан!</b>\n\n📅 {timestamp}\n📦 Размер: {size_str}",
-                        parse_mode="HTML",
-                    )
+                from aiogram.types import FSInputFile
+                await callback.message.answer_document(
+                    document=FSInputFile(filepath),
+                    caption=f"💾 <b>Бэкап создан!</b>\n\n📅 {timestamp}\n📦 Размер: {size_str}",
+                    parse_mode="HTML",
+                )
 
                 from app.core.database import AsyncSessionFactory as ASF
                 async with ASF() as session:
@@ -2054,7 +2054,7 @@ async def admin_backup(callback: CallbackQuery) -> None:
 
                 os.remove(filepath)
             else:
-                await callback.message.answer(f"❌ Ошибка бэкапа:\n{result.stderr[:500]}")
+                await callback.message.answer(f"❌ Ошибка бэкапа:\n{result.stderr[:500]}", parse_mode=None)
         else:
             await callback.message.answer("❌ Поддерживается только PostgreSQL")
 
@@ -2063,7 +2063,7 @@ async def admin_backup(callback: CallbackQuery) -> None:
     except FileNotFoundError:
         await callback.message.answer("❌ pg_dump не найден. Установите postgresql-client.")
     except Exception as e:
-        await callback.message.answer(f"❌ Ошибка: {e}")
+        await callback.message.answer(f"❌ Ошибка: {e}", parse_mode=None)
 
     await callback.answer()
 
