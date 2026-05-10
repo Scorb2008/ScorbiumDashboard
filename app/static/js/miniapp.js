@@ -9,7 +9,7 @@ class MiniApp {
     this.isOnline = true;
     this.currentScreen = 'home';
     this.userPhotoUrl = this.initDataUnsafe?.user?.photo_url || '';
-    this.embedded = window.APP_INIT_DATA || null;
+    this.embedded = (window.APP_INIT_DATA && window.APP_INIT_DATA.user) ? window.APP_INIT_DATA : null;
 
     this.init();
   }
@@ -34,7 +34,7 @@ class MiniApp {
       this.showToast('Ошибка приложения. Попробуйте обновить.', 'err');
     });
 
-    if (this.embedded && this.embedded.user) {
+    if (this.embedded) {
       this.user = this.embedded.user;
       if (this.user.is_admin) {
         const el = document.getElementById('n-admin');

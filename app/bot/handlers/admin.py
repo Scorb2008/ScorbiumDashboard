@@ -1547,13 +1547,77 @@ async def admin_quick_ban_confirm(message: Message, state: FSMContext) -> None:
 # ── 3. Массовая рассылка с фильтром ──────────────────────────────────────────
 
 
+FILTER_LABELS = {
+    "all": "👥 Все пользователи",
+    "active": "✅ С активной подпиской",
+    "no_sub": "⏰ Без подписки",
+    "expired_sub": "⌛ С истёкшей подпиской",
+    "balance_gt0": "💰 Баланс > 0",
+    "balance_gt500": "💰 Баланс > 500₽",
+    "reg_7d": "📅 Регистрация за 7 дней",
+    "reg_30d": "📅 Регистрация за 30 дней",
+    "lang_ru": "🇷🇺 Язык: Русский",
+    "lang_en": "🇬🇧 Язык: English",
+    "inactive_30d": "💤 Неактивен >30 дней",
+    "autorenew_on": "🔄 Автопродление вкл",
+}
+
+
+def _build_filter_stmt(filter_type: str, now):
+    from datetime import timedelta
+    from sqlalchemy import select
+    from app.models.user import User
+    from app.models.vpn_key import VpnKey, VpnKeyStatus
+
+    if filter_type == "all":
+        return select(User.id).where(User.is_banned == False)
+    elif filter_type == "active":
+        return (
+            select(User.id)
+            .join(VpnKey, User.id == VpnKey.user_id)
+            .where(VpnKey.status == VpnKeyStatus.ACTIVE.value)
+            .distinct()
+        )
+    elif filter_type == "no_sub":
+        subq = select(VpnKey.user_id).where(VpnKey.status == VpnKeyStatus.ACTIVE.value)
+        return select(User.id).where(User.id.not_in(subq), User.is_banned == False)
+    elif filter_type == "expired_sub":
+        subq = select(VpnKey.user_id).where(VpnKey.status == VpnKeyStatus.ACTIVE.value)
+        return (
+            select(User.id)
+            .join(VpnKey, User.id == VpnKey.user_id)
+            .where(VpnKey.status == VpnKeyStatus.EXPIRED.value, User.id.not_in(subq))
+            .distinct()
+        )
+    elif filter_type == "balance_gt0":
+        return select(User.id).where(User.balance > 0, User.is_banned == False)
+    elif filter_type == "balance_gt500":
+        return select(User.id).where(User.balance > 500, User.is_banned == False)
+    elif filter_type == "reg_7d":
+        return select(User.id).where(User.created_at >= now - timedelta(days=7), User.is_banned == False)
+    elif filter_type == "reg_30d":
+        return select(User.id).where(User.created_at >= now - timedelta(days=30), User.is_banned == False)
+    elif filter_type == "lang_ru":
+        return select(User.id).where(User.language == "ru", User.is_banned == False)
+    elif filter_type == "lang_en":
+        return select(User.id).where(User.language == "en", User.is_banned == False)
+    elif filter_type == "inactive_30d":
+        return select(User.id).where(
+            User.last_seen < now - timedelta(days=30),
+            User.is_banned == False,
+        )
+    elif filter_type == "autorenew_on":
+        return select(User.id).where(User.autorenew == True, User.is_banned == False)
+    return None
+
+
 @router.callback_query(F.data == "adm:broadcast:filtered")
 async def admin_broadcast_filtered(callback: CallbackQuery, state: FSMContext) -> None:
     if not _is_admin(callback.from_user.id):
         return
     await state.set_state(BroadcastFilterState.waiting_text)
     await callback.message.edit_text(
-        "📢 <b>Рассылка с фильтром</b>\n\nВведите текст рассылки:",
+        "📢 <b>Рассылка с фильтром</b>\n\nВведите текст рассылки (HTML поддерживается):",
         reply_markup=InlineKeyboardBuilder().row(
             InlineKeyboardButton(text="◀️ Отмена", callback_data="adm:broadcast")
         ).as_markup(),
@@ -1566,17 +1630,12 @@ async def admin_broadcast_filtered(callback: CallbackQuery, state: FSMContext) -
 async def admin_broadcast_filter_text(message: Message, state: FSMContext) -> None:
     if not _is_admin(message.from_user.id):
         return
-    await state.update_data(broadcast_text=message.text)
+    await state.update_data(broadcast_text=message.text or message.caption or "")
     await state.set_state(BroadcastFilterState.waiting_filter)
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="👥 Все пользователи", callback_data="bc_filter:all"))
-    builder.row(InlineKeyboardButton(text="✅ С активной подпиской", callback_data="bc_filter:active"))
-    builder.row(InlineKeyboardButton(text="⏰ Без подписки", callback_data="bc_filter:no_sub"))
-    builder.row(InlineKeyboardButton(text="💰 Баланс > 0", callback_data="bc_filter:balance_gt0"))
-    builder.row(InlineKeyboardButton(text="💰 Баланс > 500₽", callback_data="bc_filter:balance_gt500"))
-    builder.row(InlineKeyboardButton(text="📅 Регистрация за 7 дней", callback_data="bc_filter:reg_7d"))
-    builder.row(InlineKeyboardButton(text="📅 Регистрация за 30 дней", callback_data="bc_filter:reg_30d"))
+    for key, label in FILTER_LABELS.items():
+        builder.row(InlineKeyboardButton(text=label, callback_data=f"bc_filter:{key}"))
     builder.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="adm:broadcast"))
 
     await message.answer(
@@ -1587,10 +1646,10 @@ async def admin_broadcast_filter_text(message: Message, state: FSMContext) -> No
 
 
 @router.callback_query(F.data.startswith("bc_filter:"))
-async def admin_broadcast_filter_send(callback: CallbackQuery, state: FSMContext) -> None:
+async def admin_broadcast_filter_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     if not _is_admin(callback.from_user.id):
         return
-    filter_type = callback.data.split(":")[1]
+    filter_type = callback.data.split(":", 1)[1]
 
     data = await state.get_data()
     text = data.get("broadcast_text", "")
@@ -1598,56 +1657,111 @@ async def admin_broadcast_filter_send(callback: CallbackQuery, state: FSMContext
         await callback.answer("❌ Текст не установлен", show_alert=True)
         return
 
-    from datetime import datetime, timezone, timedelta
-    from sqlalchemy import select, or_
-    from app.models.user import User
-    from app.models.vpn_key import VpnKey, VpnKeyStatus
+    from datetime import datetime, timezone
+    from sqlalchemy import select, func
 
     async with AsyncSessionFactory() as session:
         now = datetime.now(timezone.utc)
-
-        if filter_type == "all":
-            stmt = select(User.id).where(User.is_banned == False)
-        elif filter_type == "active":
-            stmt = (
-                select(User.id)
-                .join(VpnKey, User.id == VpnKey.user_id)
-                .where(VpnKey.status == VpnKeyStatus.ACTIVE.value)
-                .distinct()
-            )
-        elif filter_type == "no_sub":
-            stmt = (
-                select(User.id)
-                .outerjoin(VpnKey, User.id == VpnKey.user_id)
-                .where(
-                    or_(
-                        VpnKey.id == None,
-                        VpnKey.status != VpnKeyStatus.ACTIVE.value,
-                    )
-                )
-                .distinct()
-            )
-        elif filter_type == "balance_gt0":
-            stmt = select(User.id).where(User.balance > 0, User.is_banned == False)
-        elif filter_type == "balance_gt500":
-            stmt = select(User.id).where(User.balance > 500, User.is_banned == False)
-        elif filter_type == "reg_7d":
-            stmt = select(User.id).where(
-                User.created_at >= now - timedelta(days=7), User.is_banned == False
-            )
-        elif filter_type == "reg_30d":
-            stmt = select(User.id).where(
-                User.created_at >= now - timedelta(days=30), User.is_banned == False
-            )
-        else:
+        stmt = _build_filter_stmt(filter_type, now)
+        if stmt is None:
             await callback.answer("❌ Неизвестный фильтр", show_alert=True)
             return
 
+        count_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
+        total_count = count_result.scalar_one()
+
+    if total_count == 0:
+        await callback.message.edit_text(
+            "⚠️ <b>Нет пользователей</b>, соответствующих этому фильтру.",
+            reply_markup=InlineKeyboardBuilder().row(
+                InlineKeyboardButton(text="◀️ Назад", callback_data="adm:broadcast")
+            ).as_markup(),
+            parse_mode="HTML",
+        )
+        await state.clear()
+        await callback.answer()
+        return
+
+    await state.update_data(filter_type=filter_type, total_count=total_count)
+    label = FILTER_LABELS.get(filter_type, filter_type)
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=f"✅ Отправить ({total_count} чел.)",
+            callback_data="bc_filter:send:confirm",
+        )
+    )
+    builder.row(InlineKeyboardButton(text="◀️ Выбрать другой фильтр", callback_data="bc_filter:reselect"))
+    builder.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="adm:broadcast"))
+
+    await callback.message.edit_text(
+        f"📢 <b>Подтверждение рассылки</b>\n\n"
+        f"📊 Фильтр: <b>{label}</b>\n"
+        f"👥 Найдено: <b>{total_count}</b> пользователей\n"
+        f"💬 Текст: {text[:100]}{'...' if len(text) > 100 else ''}\n\n"
+        f"Отправить?",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "bc_filter:reselect")
+async def admin_broadcast_filter_reselect(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        return
+    await state.set_state(BroadcastFilterState.waiting_filter)
+    data = await state.get_data()
+    text = data.get("broadcast_text", "")
+
+    builder = InlineKeyboardBuilder()
+    for key, label in FILTER_LABELS.items():
+        builder.row(InlineKeyboardButton(text=label, callback_data=f"bc_filter:{key}"))
+    builder.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="adm:broadcast"))
+
+    await callback.message.edit_text(
+        f"📊 <b>Выберите аудиторию:</b>\n\n💬 {text[:100]}{'...' if len(text) > 100 else ''}",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "bc_filter:send:confirm")
+async def admin_broadcast_filter_send(callback: CallbackQuery, state: FSMContext) -> None:
+    if not _is_admin(callback.from_user.id):
+        return
+
+    data = await state.get_data()
+    text = data.get("broadcast_text", "")
+    filter_type = data.get("filter_type", "")
+    total_count = data.get("total_count", 0)
+
+    if not text or not filter_type:
+        await callback.answer("❌ Данные не найдены", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        f"🔄 <b>Рассылка запущена...</b>\n\n👥 Всего: {total_count}\n"
+        f"📊 Фильтр: {FILTER_LABELS.get(filter_type, filter_type)}\n"
+        f"⏳ Отправка 0/{total_count}",
+        parse_mode="HTML",
+    )
+
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    from app.models.user import User
+    from app.services.telegram_notify import TelegramNotifyService
+
+    async with AsyncSessionFactory() as session:
+        now = datetime.now(timezone.utc)
+        stmt = _build_filter_stmt(filter_type, now)
         result = await session.execute(stmt)
         user_ids = [row[0] for row in result.all()]
 
         bc = await BroadcastService(session).create(
-            title=f"Фильтр: {filter_type}",
+            title=f"Фильтр: {FILTER_LABELS.get(filter_type, filter_type)}",
             text=text,
             target=filter_type,
         )
@@ -1656,20 +1770,32 @@ async def admin_broadcast_filter_send(callback: CallbackQuery, state: FSMContext
 
         sent = 0
         failed = 0
-        from app.services.telegram_notify import TelegramNotifyService
         notify = TelegramNotifyService()
+        batch_size = 20
+        total = len(user_ids)
 
-        for uid in user_ids[:200]:
+        for i, uid in enumerate(user_ids, 1):
             try:
                 await notify.send_message(uid, text)
                 sent += 1
             except Exception:
                 failed += 1
 
+            if i % batch_size == 0 or i == total:
+                try:
+                    await callback.message.edit_text(
+                        f"🔄 <b>Рассылка...</b>\n\n"
+                        f"📊 Фильтр: {FILTER_LABELS.get(filter_type, filter_type)}\n"
+                        f"⏳ {i}/{total} | ✅ {sent} | ❌ {failed}",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+
         bc.status = "completed"
         bc.sent_count = sent
         bc.failed_count = failed
-        await session.commit()
+        await session.flush()
 
         from app.services.audit import AuditService
         await AuditService(session).log(
@@ -1677,14 +1803,14 @@ async def admin_broadcast_filter_send(callback: CallbackQuery, state: FSMContext
             action="broadcast_filtered",
             target_type="broadcast",
             target_id=bc_id,
-            details=f"Filter: {filter_type}, Sent: {sent}, Failed: {failed}",
+            details=f"Filter: {filter_type}, Total: {total}, Sent: {sent}, Failed: {failed}",
         )
         await session.commit()
 
     await callback.message.edit_text(
         f"✅ <b>Рассылка завершена!</b>\n\n"
-        f"📊 Фильтр: <b>{filter_type}</b>\n"
-        f"👥 Найдено: <b>{len(user_ids)}</b>\n"
+        f"📊 Фильтр: <b>{FILTER_LABELS.get(filter_type, filter_type)}</b>\n"
+        f"👥 Найдено: <b>{total}</b>\n"
         f"✅ Отправлено: <b>{sent}</b>\n"
         f"❌ Ошибок: <b>{failed}</b>",
         reply_markup=InlineKeyboardBuilder().row(
@@ -1730,24 +1856,20 @@ async def admin_audit_log(callback: CallbackQuery) -> None:
 
     async with AsyncSessionFactory() as session:
         from app.services.audit import AuditService
-        entries = await AuditService(session).get_recent(limit=15)
+        entries = await AuditService(session).get_recent(limit=50)
 
     if not entries:
         text = "📋 <b>История действий</b>\n\nЖурнал пуст."
     else:
         lines = ["📋 <b>История действий</b>\n"]
         action_icons = {
-            "quick_ban": "⛔",
-            "ban": "🚫",
-            "unban": "✅",
-            "add_balance": "💰",
-            "deduct_balance": "💸",
-            "gift_key": "🎁",
-            "extend_key": "🔄",
-            "broadcast": "📢",
-            "broadcast_filtered": "📢",
-            "create_plan": "📦",
-            "backup_db": "💾",
+            "quick_ban": "⛔", "ban": "🚫", "unban": "✅",
+            "add_balance": "💰", "deduct_balance": "💸",
+            "gift_key": "🎁", "extend_key": "🔄",
+            "broadcast": "📢", "broadcast_filtered": "📢",
+            "create_plan": "📦", "backup_db": "💾",
+            "create_promo": "🏷", "maintenance_toggle": "🔧",
+            "2fa_backup_exported": "🔐", "login": "🔑",
         }
         for e in entries:
             icon = action_icons.get(e.action, "📝")
@@ -1755,13 +1877,15 @@ async def admin_audit_log(callback: CallbackQuery) -> None:
             target = ""
             if e.target_type and e.target_id:
                 target = f" → {e.target_type}#{e.target_id}"
-            detail = f" | {e.details[:40]}" if e.details and len(e.details) > 40 else ""
+            detail = f" | {e.details[:50]}" if e.details else ""
             lines.append(
-                f"{icon} <b>{e.action}</b>{target}{detail}\n"
-                f"   👤 Admin: {e.admin_id} | 🕐 {time_str}"
+                f"{icon} <b>{e.action}</b>{target}\n"
+                f"   👤 {e.admin_id} 🕐 {time_str}{detail}"
             )
 
         text = "\n".join(lines)
+        if len(text) > 4000:
+            text = text[:3997] + "..."
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🔄 Обновить", callback_data="adm:audit"))
@@ -1888,9 +2012,9 @@ async def admin_backup(callback: CallbackQuery) -> None:
         db_url = os.environ.get("DATABASE_URL", "")
         if not db_url:
             from app.core.config import config as _cfg
-            db_url = _cfg.database.database_url
+            db_url = _cfg.database.sync_dsn
 
-        if db_url.startswith("postgresql"):
+        if db_url.startswith("postgresql://"):
             from urllib.parse import urlparse
             parsed = urlparse(db_url)
             cmd = [
@@ -2524,7 +2648,7 @@ async def admin_broadcast_menu(callback: CallbackQuery) -> None:
         return
 
     async with AsyncSessionFactory() as session:
-        broadcasts = await BroadcastService(session).get_all(limit=5)
+        broadcasts = await BroadcastService(session).get_all(limit=15)
 
     lines = ["📢 <b>Рассылки</b>\n"]
     for b in broadcasts:

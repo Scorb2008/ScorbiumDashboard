@@ -28,12 +28,11 @@ class AuditService:
         await self.session.flush()
         return entry
 
-    async def get_recent(self, limit: int = 20) -> list[AuditLog]:
-        result = await self.session.execute(
-            select(AuditLog)
-            .order_by(desc(AuditLog.created_at))
-            .limit(limit)
-        )
+    async def get_recent(self, limit: int | None = 20) -> list[AuditLog]:
+        query = select(AuditLog).order_by(desc(AuditLog.created_at))
+        if limit is not None:
+            query = query.limit(limit)
+        result = await self.session.execute(query)
         return list(result.scalars().all())
 
     async def get_for_target(

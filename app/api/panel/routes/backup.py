@@ -43,8 +43,7 @@ async def backup_page(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/export")
 async def backup_export(request: Request, format: str = "sql"):
     _require_permission(request, "system")
-    db_cfg = config.database
-    pg_uri = f"postgresql://{db_cfg.db_user}:{db_cfg.db_password.get_secret_value()}@{db_cfg.db_host}:{db_cfg.db_port}/{db_cfg.db_name}"
+    pg_uri = config.database.sync_dsn
     cmd = ["pg_dump", "--no-password", "--clean", "--if-exists", pg_uri]
 
     try:
@@ -106,8 +105,7 @@ async def backup_import(
             _toast(resp, "Не удалось распаковать .gz файл", "error")
             return resp
 
-    db_cfg = config.database
-    pg_uri = f"postgresql://{db_cfg.db_user}:{db_cfg.db_password.get_secret_value()}@{db_cfg.db_host}:{db_cfg.db_port}/{db_cfg.db_name}"
+    pg_uri = config.database.sync_dsn
     cmd = ["psql", "--no-password", "-f", "-", pg_uri]
 
     try:

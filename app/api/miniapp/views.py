@@ -283,7 +283,7 @@ async def miniapp_index(request: Request, db: AsyncSession = Depends(get_db)):
         "about_text": settings.get("about_text", ""),
         "bot_language": settings.get("bot_language", "ru"),
         "panel_url": (settings.get("panel_url") or "").rstrip("/"),
-        "init_data_json": json.dumps(embed, ensure_ascii=False, default=str),
+        "init_data_json": json.dumps(embed if embed else None, ensure_ascii=False, default=str),
     })
 
 
