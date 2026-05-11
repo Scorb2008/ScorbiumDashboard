@@ -192,6 +192,26 @@ async def _lifespan(app: FastAPI):
                 await _s.commit()
                 log.info("✅ CryptoBot token seeded from .env")
 
+    # Seed bot_username from Telegram API
+    try:
+        import httpx as _httpx
+        _token = config.telegram.telegram_bot_token.get_secret_value()
+        async with _httpx.AsyncClient(timeout=10) as _c:
+            _r = await _c.get(f"https://api.telegram.org/bot{_token}/getMe")
+            if _r.status_code == 200:
+                _username = _r.json().get("result", {}).get("username", "")
+                if _username:
+                    from app.core.database import AsyncSessionFactory as _ASF2
+                    from app.services.bot_settings import BotSettingsService as _BSS2
+                    async with _ASF2() as _s2:
+                        _existing_bu = await _BSS2(_s2).get("bot_username")
+                        if not _existing_bu:
+                            await _BSS2(_s2).set("bot_username", _username)
+                            await _s2.commit()
+                            log.info("✅ Bot username seeded: @{}", _username)
+    except Exception as _e:
+        log.warning("Could not seed bot_username: {}", _e)
+
     log.info("✅ Application ready")
 
     from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat
