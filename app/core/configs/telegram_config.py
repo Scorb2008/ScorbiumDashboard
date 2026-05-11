@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, SecretStr, field_validator
-from typing import ClassVar, List, Literal
+from typing import ClassVar, List, Literal,Optional
 from functools import lru_cache
 import re
 
@@ -89,6 +89,14 @@ class _TelegramConfig(BaseSettings):
             except ValueError:
                 raise PasarguardValueError("Invalid TELEGRAM_ADMIN_IDS format")
         return value
+
+    @field_validator("telegram_client_id", mode="before")
+    @classmethod
+    def parse_client_id(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return 0
+        return value
+    
     
 @lru_cache()
 def get_telegram_config() -> _TelegramConfig:
