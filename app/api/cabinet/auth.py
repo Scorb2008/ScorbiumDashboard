@@ -41,7 +41,7 @@ def _verify_telegram_init_data(init_data: str) -> dict | None:
         data_check_string = "\n".join(f"{k}={v}" for k, v in items)
 
         computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-        if computed != hash_val:
+        if not hmac.compare_digest(computed, hash_val):
             return None
 
         auth_date = int(params.get("auth_date", 0))
@@ -68,7 +68,7 @@ def _verify_telegram_login(data: dict) -> dict | None:
         data_check_string = "\n".join(f"{k}={v}" for k, v in items)
 
         computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-        if computed != hash_val:
+        if not hmac.compare_digest(computed, hash_val):
             return None
 
         auth_date = int(data.get("auth_date", 0))
@@ -87,6 +87,11 @@ async def get_cabinet_user(request: Request, db: AsyncSession):
         payload = decode_access_token_full(token)
         if payload:
             try:
+                from app.services.token_blacklist import TokenBlacklistService
+                jti = payload.get("jti", "")
+                sub = payload.get("sub", "")
+                if await TokenBlacklistService(db).is_blacklisted(jti, sub):
+                    return None
                 user_id = int(payload["sub"])
                 return await UserService(db).get_by_id(user_id)
             except (ValueError, TypeError):

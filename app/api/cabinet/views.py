@@ -213,6 +213,9 @@ async def cabinet_support_message(
         return JSONResponse({"ok": False, "message": "Not authenticated"}, status_code=401)
     if not text.strip():
         return JSONResponse({"ok": False, "message": "Сообщение не может быть пустым"}, status_code=400)
+    ticket = await SupportService(db).get_by_id(ticket_id)
+    if not ticket or ticket.user_id != user.id:
+        return JSONResponse({"ok": False, "message": "Тикет не найден"}, status_code=404)
     await SupportService(db).add_message(ticket_id, user.id, text.strip())
     return JSONResponse({"ok": True})
 
@@ -334,17 +337,31 @@ async def cabinet_pay_balance(
     plan = await PlanService(db).get_by_id(plan_id)
     if not plan or not plan.is_active:
         return JSONResponse({"ok": False, "message": "Тариф не найден"}, status_code=404)
-    if user.balance < plan.price:
+
+    from sqlalchemy import select
+    from app.models.user import User
+    locked = await db.execute(select(User).where(User.id == user.id).with_for_update())
+    locked_user = locked.scalar_one_or_none()
+    if not locked_user or locked_user.balance < plan.price:
         return JSONResponse({"ok": False, "message": "Недостаточно средств"}, status_code=400)
-    payment = await PaymentService(db).create_pending(user.id, plan, PaymentProvider.BALANCE)
-    await UserService(db).deduct_balance(user.id, plan.price)
-    confirmed = await PaymentService(db).confirm(payment.id, f"balance_{payment.id}")
-    if not confirmed:
-        return JSONResponse({"ok": False, "message": "Ошибка при оплате"}, status_code=500)
-    key = await VpnKeyService(db).provision(user.id, plan)
-    if key:
+
+    try:
+        payment = await PaymentService(db).create_pending(user.id, plan, PaymentProvider.BALANCE)
+        await UserService(db).deduct_balance(user.id, plan.price)
+        confirmed = await PaymentService(db).confirm(payment.id, f"balance_{payment.id}")
+        if not confirmed:
+            await UserService(db).add_balance(user.id, plan.price)
+            return JSONResponse({"ok": False, "message": "Ошибка при оплате"}, status_code=500)
+        key = await VpnKeyService(db).provision(user.id, plan)
+        if not key:
+            await UserService(db).add_balance(user.id, plan.price)
+            await PaymentService(db).fail(payment.id)
+            return JSONResponse({"ok": False, "message": "Ошибка при создании ключа"}, status_code=500)
         return JSONResponse({"ok": True, "message": "Подписка оформлена!", "access_url": key.access_url})
-    return JSONResponse({"ok": False, "message": "Ошибка при создании ключа"}, status_code=500)
+    except Exception as e:
+        log.error("Payment error: %s", e)
+        await db.rollback()
+        return JSONResponse({"ok": False, "message": "Ошибка сервера"}, status_code=500)
 
 
 @router.get("/cabinet/logout")

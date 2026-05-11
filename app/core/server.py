@@ -353,6 +353,19 @@ def create_app() -> FastAPI:
                     "base-uri 'self'; "
                     "form-action 'self'"
                 )
+            elif is_cabinet:
+                resp.headers["Content-Security-Policy"] = (
+                    "default-src 'self'; "
+                    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://telegram.org; "
+                    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+                    "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+                    "img-src 'self' data: https:; "
+                    "connect-src 'self' wss: https:; "
+                    "frame-src 'none'; "
+                    "object-src 'none'; "
+                    "base-uri 'self'; "
+                    "form-action 'self'"
+                )
             elif is_panel:
                 # Panel uses HTMX + Bootstrap CDN
                 resp.headers["Content-Security-Policy"] = (
@@ -395,6 +408,16 @@ def create_app() -> FastAPI:
         from app.utils.security import decode_access_token_full
 
         token = websocket.query_params.get("token", "")
+        if not token:
+            raw = websocket.headers.get("cookie", "")
+            for part in raw.split(";"):
+                part = part.strip()
+                if part.startswith("vpn_session="):
+                    token = part.split("=", 1)[1]
+                    break
+                if part.startswith("cabinet_session="):
+                    token = part.split("=", 1)[1]
+                    break
         info = decode_access_token_full(token) if token else None
         if not info:
             await websocket.close(code=4001)

@@ -262,6 +262,7 @@ http {
     limit_req_zone \$binary_remote_addr zone=panel:10m   rate=30r/m;
     limit_req_zone \$binary_remote_addr zone=api:10m     rate=60r/m;
     limit_req_zone \$binary_remote_addr zone=webhook:10m rate=120r/m;
+    limit_req_zone \$binary_remote_addr zone=cabinet:10m rate=30r/m;
 
     upstream vpn_app {
         server app:8000;
@@ -302,6 +303,7 @@ http {
         proxy_next_upstream_tries 2;
 
         location /cabinet/ {
+            limit_req zone=cabinet burst=20 nodelay;
             proxy_pass http://vpn_app/cabinet/;
             proxy_set_header Host              \$host;
             proxy_set_header X-Real-IP         \$remote_addr;
