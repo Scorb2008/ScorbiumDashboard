@@ -230,10 +230,18 @@ info "[3/6] Генерирую nginx.conf..."
 
 CERT_PATH="nginx/ssl/live/${DOMAIN}/fullchain.pem"
 if [[ ! -f "$CERT_PATH" ]]; then
-    warn "SSL сертификат не найден: ${CERT_PATH}"
-    warn "Выполните: certbot certonly --standalone -d ${DOMAIN}"
-    read -rp "Продолжить без SSL? [y/N]: " CONFIRM; CONFIRM=${CONFIRM:-N}
-    [[ ! "$CONFIRM" =~ ^[Yy]$ ]] && exit 1
+    LETSENCRYPT_PATH="/etc/letsencrypt/live/${DOMAIN}"
+    if [[ -f "${LETSENCRYPT_PATH}/fullchain.pem" ]]; then
+        info "Восстанавливаю SSL сертификат из ${LETSENCRYPT_PATH}..."
+        mkdir -p "nginx/ssl/live/${DOMAIN}"
+        cp -L "${LETSENCRYPT_PATH}/fullchain.pem" "nginx/ssl/live/${DOMAIN}/fullchain.pem"
+        cp -L "${LETSENCRYPT_PATH}/privkey.pem" "nginx/ssl/live/${DOMAIN}/privkey.pem"
+    else
+        warn "SSL сертификат не найден: ${CERT_PATH}"
+        warn "Попробуйте: certbot certonly --standalone -d ${DOMAIN}"
+        read -rp "Продолжить без SSL? [y/N]: " CONFIRM; CONFIRM=${CONFIRM:-N}
+        [[ ! "$CONFIRM" =~ ^[Yy]$ ]] && exit 1
+    fi
 fi
 
 if [[ "$HTTPS_PORT" == "443" ]]; then
