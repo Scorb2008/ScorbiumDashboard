@@ -6,15 +6,15 @@
 </div>
 
 <div class="lang-list">
-  <button class="lang-btn {% if user.language in (None, 'ru') %}active{% endif %}" onclick="setLang('ru')">
+  <button class="lang-btn {% if user.language in (None, 'ru') %}active{% endif %}" onclick="setLang('ru', event)">
     <span class="lang-emoji">🇷🇺</span>
     <span class="lang-name">Русский</span>
   </button>
-  <button class="lang-btn {% if user.language == 'en' %}active{% endif %}" onclick="setLang('en')">
+  <button class="lang-btn {% if user.language == 'en' %}active{% endif %}" onclick="setLang('en', event)">
     <span class="lang-emoji">🇬🇧</span>
     <span class="lang-name">English</span>
   </button>
-  <button class="lang-btn {% if user.language == 'fa' %}active{% endif %}" onclick="setLang('fa')">
+  <button class="lang-btn {% if user.language == 'fa' %}active{% endif %}" onclick="setLang('fa', event)">
     <span class="lang-emoji">🇮🇷</span>
     <span class="lang-name">فارسی</span>
   </button>
@@ -22,7 +22,7 @@
 <div id="lang-result" class="mt-2" style="font-size:.85rem;text-align:center"></div>
 
 <script>
-async function setLang(lang) {
+async function setLang(lang, evt) {
   const fd = new FormData();
   fd.append('lang', lang);
   try {
@@ -30,7 +30,7 @@ async function setLang(lang) {
     const d = await r.json();
     if (d.ok) {
       document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
-      event.target.closest('.lang-btn').classList.add('active');
+      (evt.target.closest('.lang-btn') || evt.target).classList.add('active');
       document.getElementById('lang-result').innerHTML = '<span class="text-success">✅ Язык изменён</span>';
     }
   } catch(e) {}

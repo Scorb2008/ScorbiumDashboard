@@ -20,6 +20,9 @@
         <a href="/cabinet/keys" class="nav-link"><i class="bi bi-key"></i><span>Подписки</span></a>
         <a href="/cabinet/profile" class="nav-link"><i class="bi bi-person"></i><span>Профиль</span></a>
         <a href="/cabinet/support" class="nav-link"><i class="bi bi-chat-dots"></i><span>Поддержка</span></a>
+        {% if user is defined and is_admin_user(user) %}
+        <a href="/panel/" class="nav-link"><i class="bi bi-shield-lock"></i><span>Админ панель</span></a>
+        {% endif %}
       </div>
       <a href="/cabinet/logout" class="dash-logout"><i class="bi bi-box-arrow-right"></i></a>
     </div>
@@ -35,6 +38,9 @@
     <a href="/cabinet/keys" class="mini-nav-link"><i class="bi bi-key"></i><span>Ключи</span></a>
     <a href="/cabinet/profile" class="mini-nav-link"><i class="bi bi-person"></i><span>Я</span></a>
     <a href="/cabinet/support" class="mini-nav-link"><i class="bi bi-chat-dots"></i><span>Чат</span></a>
+    {% if user is defined and is_admin_user(user) %}
+    <a href="/panel/" class="mini-nav-link"><i class="bi bi-shield-lock"></i><span>Админ</span></a>
+    {% endif %}
   </nav>
   {% endif %}
 </div>

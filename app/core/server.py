@@ -322,6 +322,7 @@ def create_app() -> FastAPI:
             path = request.url.path
             is_panel = path.startswith("/panel")
             is_cabinet = path.startswith("/cabinet")
+            is_docs = path in ("/docs", "/redoc", "/openapi.json")
 
             if is_cabinet:
                 resp.headers["X-Frame-Options"] = "ALLOWALL"

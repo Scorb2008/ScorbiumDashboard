@@ -25,6 +25,7 @@ router = APIRouter()
 
 _tpl_path = Path(__file__).resolve().parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_tpl_path))
+templates.env.globals["is_admin_user"] = lambda u: bool(u and u.id in config.telegram.telegram_admin_ids)
 
 
 async def _require_user(request: Request, db: AsyncSession):
