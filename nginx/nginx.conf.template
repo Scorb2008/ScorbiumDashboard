@@ -29,6 +29,14 @@ server {
     add_header X-Frame-Options SAMEORIGIN always;
     add_header X-Content-Type-Options nosniff always;
 
+    location /dashboard/ {
+        proxy_pass http://vpn_app/dashboard/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Telegram-Init-Data $http_x_telegram_init_data;
+    }
     location /panel/ {
         limit_req zone=panel burst=20 nodelay;
         proxy_pass http://vpn_app;
