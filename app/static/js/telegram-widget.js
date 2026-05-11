@@ -8,6 +8,9 @@
   }(window));
   (function(window){
 
+  var TG_WIDGET_ORIGIN = 'https://oauth.telegram.org';
+  var TG_WIDGET_DEV_ORIGIN = 'https://oauth.tg.dev';
+
   function addEvent(el, event, handler) {
     var events = event.split(/\s+/);
     for (var i = 0; i < events.length; i++) {
@@ -179,7 +182,7 @@
     }
     else if (widgetEl.hasAttribute('data-telegram-login')) {
       widgetId = widgetEl.getAttribute('data-telegram-login');
-      widgetsOrigin = getWidgetsOrigin('https://oauth.telegram.org', 'https://oauth.tg.dev');
+      widgetsOrigin = TG_WIDGET_ORIGIN;
       widgetElId = 'telegram-login-' + widgetId.replace(/[^a-z0-9_]/ig, '-');
       src = widgetsOrigin + '/embed/' + widgetId + '?origin=' + encodeURIComponent(location.origin || location.protocol + '//' + location.hostname) + '&return_to=' + encodeURIComponent(location.href);
       allowedAttrs = ['size', 'userpic', 'init_auth', 'request_access', 'radius', 'min_width', 'max_width', 'lang'];
@@ -566,7 +569,7 @@
     init: TelegramLogin._init,
     open: TelegramLogin._open,
     auth: TelegramLogin._auth,
-    widgetsOrigin: getWidgetsOrigin('https://oauth.telegram.org', 'https://oauth.tg.dev')
+    widgetsOrigin: TG_WIDGET_ORIGIN
   };
 
   }(window));
