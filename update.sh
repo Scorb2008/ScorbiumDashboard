@@ -476,19 +476,25 @@ fi
 # ── [6/6] Nginx ──────────────────────────────────────────────────────────────
 info "[6/6] Обновляю nginx..."
 
-# Validate nginx config before reloading
-NGINX_TEST=$(docker compose -f "$COMPOSE_FILE" exec nginx nginx -t 2>&1) || {
-    warn "nginx -t failed:\n${NGINX_TEST}"
-    info "Восстанавливаю старый конфиг и перезапускаю..."
-    docker compose -f "$COMPOSE_FILE" restart nginx
-}
+NGINX_EXISTS=$(docker inspect vpn_nginx 2>/dev/null && echo "yes" || echo "no")
 
-# Try graceful reload first
-if docker compose -f "$COMPOSE_FILE" exec nginx nginx -s reload 2>/dev/null; then
-    success "nginx reload выполнен (graceful)"
+if [[ "$NGINX_EXISTS" == "no" ]]; then
+    warn "nginx контейнер не найден — создаю..."
+    docker compose -f "$COMPOSE_FILE" up -d nginx
+    sleep 3
+elif docker compose -f "$COMPOSE_FILE" exec nginx nginx -t 2>&1; then
+    # Config is valid — try graceful reload
+    if docker compose -f "$COMPOSE_FILE" exec nginx nginx -s reload 2>/dev/null; then
+        success "nginx reload выполнен (graceful)"
+    else
+        warn "nginx reload failed, делаю restart..."
+        docker compose -f "$COMPOSE_FILE" restart nginx
+        sleep 3
+    fi
 else
-    warn "nginx reload failed, делаю restart..."
-    docker compose -f "$COMPOSE_FILE" restart nginx
+    warn "nginx config невалидный — перезапускаю со старым конфигом..."
+    docker compose -f "$COMPOSE_FILE" restart nginx 2>/dev/null || \
+        docker compose -f "$COMPOSE_FILE" up -d nginx
     sleep 3
 fi
 
