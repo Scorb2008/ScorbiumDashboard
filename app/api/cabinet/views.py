@@ -46,18 +46,25 @@ async def _ensure_bot_username(db: AsyncSession, settings: dict) -> str:
     bu = settings.get("bot_username", "")
     if bu:
         return bu
+    log.info("bot_username not in DB — fetching from Telegram API...")
     try:
         import httpx
         token = config.telegram.telegram_bot_token.get_secret_value()
-        async with httpx.AsyncClient(timeout=5) as c:
+        async with httpx.AsyncClient(timeout=10) as c:
             r = await c.get(f"https://api.telegram.org/bot{token}/getMe")
             if r.status_code == 200:
                 bu = (r.json().get("result", {}) or {}).get("username", "")
                 if bu:
                     await BotSettingsService(db).set("bot_username", bu)
                     await db.commit()
+                    log.info("bot_username fetched from API: @{}", bu)
+                else:
+                    log.warning("Telegram API getMe returned empty username")
+            else:
+                log.warning("Telegram API getMe failed: HTTP {}", r.status_code)
         return bu
-    except Exception:
+    except Exception as e:
+        log.warning("Failed to fetch bot_username from Telegram API: {}", e)
         return ""
 
 
