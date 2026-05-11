@@ -64,16 +64,9 @@ async def cabinet_index(request: Request, db: AsyncSession = Depends(get_db)):
         })
 
     svc = await BotSettingsService(db).get_all()
-    init_data = request.headers.get("X-Telegram-Init-Data", "")
-    if init_data:
-        return templates.TemplateResponse("cabinet/login.html", {
-            "request": request, "app_name": config.web.app_name, "settings": svc,
-            "error": "Ошибка авторизации. Попробуйте заново.",
-            "is_mini_app": True,
-        })
     return templates.TemplateResponse("cabinet/login.html", {
         "request": request, "app_name": config.web.app_name, "settings": svc,
-        "error": None, "is_mini_app": False,
+        "error": None, "is_mini_app": bool(request.headers.get("X-Telegram-Init-Data", "")),
     })
 
 
