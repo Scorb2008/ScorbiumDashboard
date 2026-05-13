@@ -16,32 +16,46 @@ router = APIRouter()
 
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
-async def support_page(request: Request, db: AsyncSession = Depends(get_db)):
+async def support_page(
+    request: Request, db: AsyncSession = Depends(get_db),
+    status: str | None = None,
+):
     admin_info = _require_permission(request, "support")
     ctx = await _base_ctx(request, db, "support", admin_info)
-    result = await db.execute(
-        select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(100)
-    )
+    query = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(100)
+    if status in ("open", "in_progress", "closed"):
+        query = query.where(SupportTicket.status == status)
+    result = await db.execute(query)
     ctx["tickets"] = list(result.scalars().all())
+    ctx["current_status"] = status or ""
     return templates.TemplateResponse("support.html", ctx)
 
 
 @router.get("/{ticket_id}", response_class=HTMLResponse)
 async def ticket_detail(
-    ticket_id: int, request: Request, db: AsyncSession = Depends(get_db),
+    ticket_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    status: str | None = None,
 ):
-    _require_permission(request, "support")
+    admin_info = _require_permission(request, "support")
+    ctx = await _base_ctx(request, db, "support", admin_info)
+    query = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(100)
+    if status in ("open", "in_progress", "closed"):
+        query = query.where(SupportTicket.status == status)
+        ctx["current_status"] = status
+    else:
+        ctx["current_status"] = ""
+    result = await db.execute(query)
+    ctx["tickets"] = list(result.scalars().all())
+
     result = await db.execute(select(SupportTicket).where(SupportTicket.id == ticket_id))
     ticket = result.scalar_one_or_none()
     if not ticket:
-        resp = Response(status_code=404)
-        _toast(resp, 'Тикет не найден', 'error')
-        return resp
-    messages_html = _render_messages(ticket)
-    return HTMLResponse(
-        f'<div id="ticket-messages">{messages_html}</div>'
-        f'<div id="ticket-status" data-status="{ticket.status}"></div>'
-    )
+        return templates.TemplateResponse("support.html", {**ctx, "ticket": None})
+    ctx["ticket"] = ticket
+    ctx["selected_id"] = ticket.id
+    return templates.TemplateResponse("support.html", ctx)
 
 
 @router.post("/{ticket_id}/reply", response_class=HTMLResponse)

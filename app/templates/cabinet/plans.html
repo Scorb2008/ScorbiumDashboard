@@ -2,77 +2,52 @@
 {% block title %}Тарифы - {{ app_name }}{% endblock %}
 {% block content %}
 <div class="dash-stack">
-  <section class="hero-panel">
-    <div class="hero-grid">
-      <div class="hero-copy">
-        <div class="eyebrow">
-          <i class="bi bi-stars"></i>
-          <span>Подключение без лишних шагов</span>
-        </div>
-        <div class="dash-header">
-          <div>
-            <h1>Выберите тариф</h1>
-            <p class="dash-subtitle">После оплаты ключ появится в разделе «Подписки», а доступ можно будет сразу скопировать или открыть.</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="hero-aside">
-        <div class="summary-card">
-          <small>Баланс</small>
-          <strong>{{ "%.2f"|format(user.balance) }} ₽</strong>
-          <span>Можно оплатить сразу с баланса</span>
-        </div>
-        <div class="summary-card">
-          <small>Оплата картой</small>
-          <strong>Скоро</strong>
-          <span>Сейчас доступна оплата с внутреннего баланса</span>
-        </div>
-      </div>
+  <div class="section-header">
+    <h2>Выберите тариф</h2>
+    <div class="summary-card" style="padding:10px 14px;border-radius:14px;">
+      <strong style="display:inline;font-size:1rem;">{{ "%.2f"|format(user.balance) }} ₽</strong>
+      <small class="text-muted">на балансе</small>
     </div>
-  </section>
+  </div>
 
   <section class="plans-list">
     {% for plan in plans %}
     <article class="plan-full-card">
       <div class="eyebrow">
         <i class="bi bi-lightning-charge"></i>
-        <span>{{ plan.duration_days }} дней доступа</span>
+        <span>{{ plan.duration_days }} дней</span>
       </div>
       <div class="plan-full-header">
         <h3>{{ plan.name }}</h3>
         <div class="plan-full-price">{{ "%.0f"|format(plan.price) }} ₽</div>
-        <div class="plan-full-duration">Подходит для стабильного ежедневного использования</div>
       </div>
       {% if plan.description %}
       <div class="plan-full-desc">{{ plan.description }}</div>
       {% endif %}
       <div class="plan-full-actions">
         <button type="button" class="btn-accent" onclick="payBalance({{ plan.id }})">
-          <i class="bi bi-wallet2"></i> Оплатить с баланса
+          <i class="bi bi-wallet2"></i> С баланса
         </button>
         <button type="button" class="btn-outline" onclick="payYooKassa({{ plan.id }})">
-          <i class="bi bi-credit-card-2-front"></i> Оплатить картой
+          <i class="bi bi-credit-card-2-front"></i> Картой
         </button>
       </div>
     </article>
     {% else %}
     <div class="empty-state">
       <div class="empty-illustration"><i class="bi bi-emoji-frown"></i></div>
-      <p>Тарифы временно недоступны. Попробуйте позже.</p>
+      <p>Тарифы временно недоступны</p>
     </div>
     {% endfor %}
   </section>
 
-  <section class="section-panel">
-    <div class="info-card">
-      <i class="bi bi-info-circle text-success"></i>
-      <div>
-        <strong>Нужно пополнить баланс?</strong>
-        <div class="muted">Перейдите в раздел <a href="/cabinet/balance">«Баланс»</a>, чтобы увидеть историю пополнений и подготовить оплату.</div>
-      </div>
+  <div class="info-card">
+    <i class="bi bi-info-circle text-success"></i>
+    <div>
+      <strong>Пополнить баланс</strong>
+      <div class="muted">Перейдите в раздел <a href="/cabinet/balance">«Баланс»</a></div>
     </div>
-  </section>
+  </div>
 </div>
 {% endblock %}
 
@@ -102,6 +77,6 @@ async function payBalance(planId) {
 }
 
 function payYooKassa() {
-  showToast('Оплата картой будет подключена в ближайшем обновлении', 'info');
+  showToast('Оплата картой будет доступна позже', 'info');
 }
 {% endblock %}

@@ -2,61 +2,30 @@
 {% block title %}Поддержка - {{ app_name }}{% endblock %}
 {% block content %}
 <div class="dash-stack">
-  <section class="hero-panel">
-    <div class="hero-grid">
-      <div class="hero-copy">
-        <div class="eyebrow">
-          <i class="bi bi-headset"></i>
-          <span>Поддержка без потери переписки</span>
-        </div>
-        <div class="dash-header">
-          <div>
-            <h1>Свяжитесь с поддержкой</h1>
-            <p class="dash-subtitle">Создайте обращение, следите за статусом и продолжайте диалог в одном месте.</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="hero-aside">
-        <div class="summary-card">
-          <small>Всего обращений</small>
-          <strong>{{ tickets|length }}</strong>
-          <span>{% if tickets %}Вся история уже сохранена{% else %}Пока без тикетов{% endif %}</span>
-        </div>
-      </div>
-    </div>
-  </section>
+  <div class="section-header">
+    <h2>Поддержка</h2>
+  </div>
 
   <section class="section-panel">
     <div class="section-header">
-      <div>
-        <h2>Новое обращение</h2>
-        <p class="section-note">Опишите проблему как можно точнее, чтобы ответ был быстрее и полезнее.</p>
-      </div>
+      <h3 class="section-title">Новое обращение</h3>
     </div>
 
-    <form onsubmit="return createTicket(event)" class="cards-grid">
-      <div class="card">
-        <label class="detail-label" for="ticket-subject">Тема</label>
-        <input type="text" id="ticket-subject" class="form-input mt-2" placeholder="Например: подписка не подключается" required>
-      </div>
-      <div class="card" style="grid-column: 1 / -1;">
-        <label class="detail-label" for="ticket-text">Сообщение</label>
-        <textarea id="ticket-text" class="form-input mt-2" rows="5" placeholder="Опишите, что произошло, и что вы уже попробовали." required></textarea>
-      </div>
-      <div style="grid-column: 1 / -1;" class="action-row">
-        <button type="submit" class="btn-accent"><i class="bi bi-send"></i> Отправить обращение</button>
-        <div id="ticket-result"></div>
+    <form onsubmit="return createTicket(event)">
+      <div class="dash-stack">
+        <input type="text" id="ticket-subject" class="form-input" placeholder="Тема обращения" required>
+        <textarea id="ticket-text" class="form-input" rows="3" placeholder="Опишите проблему..." required></textarea>
+        <div class="action-row">
+          <button type="submit" class="btn-accent"><i class="bi bi-send"></i> Отправить</button>
+          <div id="ticket-result"></div>
+        </div>
       </div>
     </form>
   </section>
 
   <section class="section-panel">
     <div class="section-header">
-      <div>
-        <h2>Мои обращения</h2>
-        <p class="section-note">Откройте тикет, чтобы посмотреть всю переписку или продолжить разговор.</p>
-      </div>
+      <h3 class="section-title">Мои обращения</h3>
     </div>
 
     {% if tickets %}
@@ -66,8 +35,8 @@
         <div>
           <div class="ticket-subject">{{ t.subject }}</div>
           <div class="ticket-info">
-            <span class="ticket-date">{{ t.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
-            <span class="muted">{{ t.messages|length }} сообщений</span>
+            <span class="ticket-date">{{ t.created_at.strftime('%d.%m.%Y') }}</span>
+            <span class="muted">{{ t.messages|length }} сообщ.</span>
           </div>
         </div>
         <span class="status-chip status-{{ t.status if t.status else 'open' }}">
@@ -79,7 +48,7 @@
     {% else %}
     <div class="empty-state">
       <div class="empty-illustration"><i class="bi bi-chat-left-text"></i></div>
-      <p>У вас пока нет обращений. Создайте первое тикет-сообщение выше.</p>
+      <p>Нет обращений</p>
     </div>
     {% endif %}
   </section>
@@ -104,7 +73,7 @@ async function createTicket(event) {
     });
 
     if (result.data.ok) {
-      setMsg(resultBox, true, 'Обращение создано. Открываем переписку...');
+      setMsg(resultBox, true, 'Обращение создано');
       setTimeout(function() {
         window.location.href = cabinetUrl('/cabinet/support/' + result.data.ticket_id);
       }, 700);

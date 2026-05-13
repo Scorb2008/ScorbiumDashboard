@@ -2,25 +2,23 @@
 {% block title %}Тикет #{{ ticket.id }} - {{ app_name }}{% endblock %}
 {% block content %}
 <div class="dash-stack">
-  <section class="section-panel">
-    <a href="/cabinet/support" class="back-link"><i class="bi bi-arrow-left"></i> Назад к списку обращений</a>
+  <a href="/cabinet/support" class="back-link"><i class="bi bi-arrow-left"></i> Назад</a>
+
+  <div class="section-panel">
     <div class="section-header">
       <div>
         <h2>{{ ticket.subject }}</h2>
-        <p class="section-note">Тикет #{{ ticket.id }} создан {{ ticket.created_at.strftime('%d.%m.%Y %H:%M') if ticket.created_at else '—' }}</p>
+        <p class="section-note">#{{ ticket.id }} · {{ ticket.created_at.strftime('%d.%m.%Y') if ticket.created_at else '—' }}</p>
       </div>
       <span class="status-chip status-{{ ticket.status if ticket.status else 'open' }}">
         {{ ticket.status if ticket.status else 'open' }}
       </span>
     </div>
-  </section>
+  </div>
 
-  <section class="section-panel">
+  <div class="section-panel">
     <div class="section-header">
-      <div>
-        <h2>Переписка</h2>
-        <p class="section-note">Все сообщения сохраняются, поэтому можно спокойно продолжить диалог позже.</p>
-      </div>
+      <h3 class="section-title">Переписка</h3>
     </div>
 
     {% if ticket.messages %}
@@ -36,27 +34,24 @@
     {% else %}
     <div class="empty-state">
       <div class="empty-illustration"><i class="bi bi-chat-left-dots"></i></div>
-      <p>В этом тикете пока нет сообщений.</p>
+      <p>Нет сообщений</p>
     </div>
     {% endif %}
-  </section>
+  </div>
 
-  <section class="section-panel">
+  <div class="section-panel">
     <div class="section-header">
-      <div>
-        <h2>Ответить в тикет</h2>
-        <p class="section-note">Напишите уточнение, лог ошибки или вопрос по текущей проблеме.</p>
-      </div>
+      <h3 class="section-title">Ответить</h3>
     </div>
 
     <form onsubmit="return sendTicketMessage(event)">
-      <textarea id="ticket-message" class="form-input" rows="5" placeholder="Напишите сообщение..." required></textarea>
+      <textarea id="ticket-message" class="form-input" rows="3" placeholder="Напишите сообщение..." required></textarea>
       <div class="action-row mt-2">
         <button type="submit" class="btn-accent"><i class="bi bi-send"></i> Отправить</button>
         <div id="ticket-message-result"></div>
       </div>
     </form>
-  </section>
+  </div>
 </div>
 {% endblock %}
 
@@ -76,14 +71,14 @@ async function sendTicketMessage(event) {
     });
 
     if (result.data.ok) {
-      setMsg(resultBox, true, 'Сообщение отправлено');
+      setMsg(resultBox, true, 'Отправлено');
       setTimeout(function() {
         window.location.reload();
       }, 500);
       return false;
     }
 
-    setMsg(resultBox, false, result.data.message || 'Не удалось отправить сообщение');
+    setMsg(resultBox, false, result.data.message || 'Ошибка');
   } catch (error) {
     setMsg(resultBox, false, 'Ошибка сети');
   }

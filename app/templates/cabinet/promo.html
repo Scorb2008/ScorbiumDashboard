@@ -1,17 +1,16 @@
 {% extends "cabinet/base.html" %}
 {% block title %}Промокод — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="dash-header">
-  <h2>🎁 Промокод</h2>
-</div>
+<div class="dash-stack">
+  <h2>Промокод</h2>
 
-<div class="promo-card">
-  <p class="promo-text">Введите промокод для получения скидки или бонуса</p>
-  <form onsubmit="return applyPromo(event)">
-    <input type="text" id="promo-code" class="form-input" placeholder="Введите промокод" required autocomplete="off">
-    <button type="submit" class="btn-accent w-100 mt-2">Активировать</button>
-  </form>
-  <div id="promo-result" class="mt-2" style="font-size:.85rem"></div>
+  <div class="promo-card">
+    <form onsubmit="return applyPromo(event)" class="dash-stack">
+      <input type="text" id="promo-code" class="form-input" placeholder="Введите промокод" required autocomplete="off">
+      <button type="submit" class="btn-accent w-100">Активировать</button>
+      <div id="promo-result"></div>
+    </form>
+  </div>
 </div>
 
 <script>

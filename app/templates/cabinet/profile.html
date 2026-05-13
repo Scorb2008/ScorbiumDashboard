@@ -6,9 +6,8 @@
     <div class="profile-hero">
       <div class="profile-avatar">{{ (user.full_name or user.username or 'U')[:1]|upper }}</div>
       <div>
-        <div class="profile-name">{{ user.full_name or 'Пользователь Telegram' }}</div>
-        <div class="profile-id">Telegram ID: {{ user.id }}</div>
-        <div class="profile-username">{% if user.username %}@{{ user.username }}{% else %}Username не указан{% endif %}</div>
+        <div class="profile-name">{{ user.full_name or 'Пользователь' }}</div>
+        <div class="profile-username">{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</div>
       </div>
     </div>
 
@@ -18,24 +17,24 @@
         <span class="info-value">{{ "%.2f"|format(user.balance) }} ₽</span>
       </div>
       <div class="info-item">
-        <span class="info-label">Подписок</span>
+        <span class="info-label">Подписки</span>
         <span class="info-value">{{ keys|length }}</span>
       </div>
       <div class="info-item">
-        <span class="info-label">Платежей</span>
+        <span class="info-label">Платежи</span>
         <span class="info-value">{{ payments|length }}</span>
       </div>
       <div class="info-item">
-        <span class="info-label">Рефералов</span>
+        <span class="info-label">Рефералы</span>
         <span class="info-value">{{ referrals_count }}</span>
       </div>
       <div class="info-item">
-        <span class="info-label">Статус аккаунта</span>
+        <span class="info-label">Статус</span>
         <span class="info-value">{% if user.is_banned %}Заблокирован{% else %}Активен{% endif %}</span>
       </div>
       <div class="info-item">
-        <span class="info-label">Последняя активность</span>
-        <span class="info-value">{% if user.last_seen %}{{ user.last_seen.strftime('%d.%m.%Y %H:%M') }}{% else %}В этой сессии{% endif %}</span>
+        <span class="info-label">Активность</span>
+        <span class="info-value">{% if user.last_seen %}{{ user.last_seen.strftime('%d.%m.%Y') }}{% else %}Сегодня{% endif %}</span>
       </div>
     </div>
 
@@ -48,11 +47,8 @@
 
   <section class="section-panel">
     <div class="section-header">
-      <div>
-        <h2>Последние подписки</h2>
-        <p class="section-note">Быстрый доступ к активным и завершенным ключам.</p>
-      </div>
-      <a href="/cabinet/keys" class="btn-outline">Все подписки</a>
+      <h2>Последние подписки</h2>
+      <a href="/cabinet/keys" class="btn-outline">Все</a>
     </div>
 
     {% if keys %}
@@ -67,8 +63,8 @@
           </div>
         </div>
         {% if key.access_url and key.access_url != 'pending' %}
-        <button type="button" class="btn-outline" onclick="copyText({{ key.access_url|tojson }}, 'Ссылка подписки скопирована')">
-          <i class="bi bi-copy"></i> Скопировать
+        <button type="button" class="btn-outline" onclick="copyText({{ key.access_url|tojson }}, 'Ссылка скопирована')">
+          <i class="bi bi-copy"></i>
         </button>
         {% endif %}
       </div>
@@ -77,18 +73,15 @@
     {% else %}
     <div class="empty-state">
       <div class="empty-illustration"><i class="bi bi-key"></i></div>
-      <p>Подписок пока нет. Начните с выбора тарифа.</p>
+      <p>Нет активных подписок</p>
     </div>
     {% endif %}
   </section>
 
   <section class="section-panel">
     <div class="section-header">
-      <div>
-        <h2>Последние платежи</h2>
-        <p class="section-note">История операций по подпискам и пополнениям.</p>
-      </div>
-      <a href="/cabinet/balance" class="btn-outline">К балансу</a>
+      <h2>Последние платежи</h2>
+      <a href="/cabinet/balance" class="btn-outline">История</a>
     </div>
 
     {% if payments %}
@@ -100,7 +93,7 @@
             {{ "%.2f"|format(p.amount) }} ₽
           </span>
           <span class="payment-provider">{{ p.provider }}</span>
-          <span class="payment-date">{{ p.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+          <span class="payment-date">{{ p.created_at.strftime('%d.%m.%Y') }}</span>
         </div>
         <span class="status-chip status-{{ p.status }}">{{ p.status }}</span>
       </div>
@@ -109,7 +102,7 @@
     {% else %}
     <div class="empty-state">
       <div class="empty-illustration"><i class="bi bi-receipt"></i></div>
-      <p>Пока нет платежей в истории.</p>
+      <p>Платежей пока нет</p>
     </div>
     {% endif %}
   </section>
