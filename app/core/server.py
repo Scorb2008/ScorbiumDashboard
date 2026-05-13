@@ -362,7 +362,8 @@ def create_app() -> FastAPI:
             is_docs = path in ("/docs", "/redoc", "/openapi.json")
 
             if is_cabinet:
-                resp.headers.pop("X-Frame-Options", None)
+                if "X-Frame-Options" in resp.headers:
+                    del resp.headers["X-Frame-Options"]
             elif is_panel:
                 resp.headers["X-Frame-Options"] = "SAMEORIGIN"
             else:
