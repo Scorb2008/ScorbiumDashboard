@@ -1,10 +1,17 @@
 from decimal import Decimal
+from dataclasses import dataclass
 from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment import Payment, PaymentProvider, PaymentStatus, PaymentType
 from app.models.plan import Plan
+
+
+@dataclass(frozen=True)
+class PaymentConfirmationResult:
+    payment: Optional[Payment]
+    just_confirmed: bool
 
 
 class PaymentService:
@@ -162,6 +169,28 @@ class PaymentService:
         Uses SELECT ... FOR UPDATE to prevent race conditions where
         two webhooks could both confirm the same payment.
         """
+        result = await self.confirm_once(payment_id, external_id)
+        return result.payment
+
+    async def confirm_topup(self, payment_id: int, external_id: str) -> Optional[Payment]:
+        """Atomic topup confirmation with FOR UPDATE lock."""
+        result = await self.confirm_topup_once(payment_id, external_id)
+        return result.payment
+
+    async def confirm_once(self, payment_id: int, external_id: str) -> PaymentConfirmationResult:
+        """Confirm a subscription payment exactly once.
+
+        Returns whether this call changed the payment from pending to succeeded.
+        Replayed or out-of-order webhooks keep returning the existing payment
+        without re-running side effects.
+        """
+        return await self._confirm_once(payment_id, external_id)
+
+    async def confirm_topup_once(self, payment_id: int, external_id: str) -> PaymentConfirmationResult:
+        """Confirm a top-up payment exactly once."""
+        return await self._confirm_once(payment_id, external_id)
+
+    async def _confirm_once(self, payment_id: int, external_id: str) -> PaymentConfirmationResult:
         from sqlalchemy import select as _select
         result = await self.session.execute(
             _select(Payment)
@@ -170,29 +199,15 @@ class PaymentService:
         )
         payment = result.scalar_one_or_none()
         if not payment:
-            return None
+            return PaymentConfirmationResult(payment=None, just_confirmed=False)
         if payment.status == PaymentStatus.SUCCEEDED.value:
-            return payment
+            return PaymentConfirmationResult(payment=payment, just_confirmed=False)
+        if payment.status != PaymentStatus.PENDING.value:
+            return PaymentConfirmationResult(payment=payment, just_confirmed=False)
         payment.status = PaymentStatus.SUCCEEDED.value
         payment.external_id = external_id
         await self.session.flush()
-        return payment
-
-    async def confirm_topup(self, payment_id: int, external_id: str) -> Optional[Payment]:
-        """Atomic topup confirmation with FOR UPDATE lock."""
-        from sqlalchemy import select as _select
-        result = await self.session.execute(
-            _select(Payment)
-            .where(Payment.id == payment_id)
-            .with_for_update()
-        )
-        payment = result.scalar_one_or_none()
-        if not payment or payment.status == PaymentStatus.SUCCEEDED.value:
-            return payment
-        payment.status = PaymentStatus.SUCCEEDED.value
-        payment.external_id = external_id
-        await self.session.flush()
-        return payment
+        return PaymentConfirmationResult(payment=payment, just_confirmed=True)
 
     async def fail(self, payment_id: int) -> Optional[Payment]:
         payment = await self.get_by_id(payment_id)

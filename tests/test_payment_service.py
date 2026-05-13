@@ -1,9 +1,5 @@
 """Tests for PaymentService: idempotency, race conditions, edge cases."""
-import pytest
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
-from sqlalchemy import select
 
 from app.models.payment import PaymentStatus, PaymentProvider, PaymentType, Payment
 from app.services.payment import PaymentService
@@ -14,14 +10,16 @@ class TestPaymentService:
         svc = PaymentService(session)
         payment_id = sample_payment.id
 
-        confirmed = await svc.confirm(payment_id, "ext_001")
-        assert confirmed is not None
-        assert confirmed.status == PaymentStatus.SUCCEEDED.value
+        first = await svc.confirm_once(payment_id, "ext_001")
+        assert first.payment is not None
+        assert first.just_confirmed is True
+        assert first.payment.status == PaymentStatus.SUCCEEDED.value
 
-        confirmed_again = await svc.confirm(payment_id, "ext_002")
-        assert confirmed_again is not None
-        assert confirmed_again.status == PaymentStatus.SUCCEEDED.value
-        assert confirmed_again.external_id == "ext_001"
+        second = await svc.confirm_once(payment_id, "ext_002")
+        assert second.payment is not None
+        assert second.just_confirmed is False
+        assert second.payment.status == PaymentStatus.SUCCEEDED.value
+        assert second.payment.external_id == "ext_001"
 
     async def test_confirm_nonexistent_payment(self, session):
         svc = PaymentService(session)
@@ -41,13 +39,25 @@ class TestPaymentService:
         payment_id = payment.id
 
         svc = PaymentService(session)
-        confirmed = await svc.confirm_topup(payment_id, "ext_topup_001")
-        assert confirmed is not None
-        assert confirmed.status == PaymentStatus.SUCCEEDED.value
+        first = await svc.confirm_topup_once(payment_id, "ext_topup_001")
+        assert first.payment is not None
+        assert first.just_confirmed is True
+        assert first.payment.status == PaymentStatus.SUCCEEDED.value
 
-        confirmed_again = await svc.confirm_topup(payment_id, "ext_topup_002")
-        assert confirmed_again is not None
-        assert confirmed_again.external_id == "ext_topup_001"
+        second = await svc.confirm_topup_once(payment_id, "ext_topup_002")
+        assert second.payment is not None
+        assert second.just_confirmed is False
+        assert second.payment.external_id == "ext_topup_001"
+
+    async def test_confirm_once_does_not_reopen_failed_payment(self, session, sample_payment):
+        svc = PaymentService(session)
+        await svc.fail(sample_payment.id)
+
+        result = await svc.confirm_once(sample_payment.id, "ext_failed")
+
+        assert result.payment is not None
+        assert result.just_confirmed is False
+        assert result.payment.status == PaymentStatus.FAILED.value
 
     async def test_is_already_processed(self, session, sample_payment):
         svc = PaymentService(session)

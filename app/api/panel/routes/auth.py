@@ -1,8 +1,16 @@
 """Authentication and 2FA routes."""
+import base64
+import hashlib
+import io
+import json
 import secrets
 from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+import pyotp
+import qrcode
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db
@@ -21,12 +29,61 @@ from .shared import (
 router = APIRouter()
 
 
-import pyotp
-import hashlib
-import json
-import qrcode
-import base64
-import io
+PREAUTH_COOKIE = "vpn_preauth"
+PREAUTH_MAX_AGE = 600
+
+
+async def _login_template_context(
+    request: Request,
+    db: AsyncSession,
+    *,
+    error: str | None = None,
+    show_2fa: bool = False,
+) -> dict:
+    settings = await BotSettingsService(db).get_all()
+    return {
+        "request": request,
+        "error": error,
+        "app_name": config.web.app_name,
+        "app_version": config.web.app_version,
+        "custom_logo": settings.get("custom_logo", ""),
+        "show_2fa": show_2fa,
+        "bot_language": settings.get("bot_language", "ru"),
+    }
+
+
+async def _verify_2fa_code(admin: Admin, code: str, db: AsyncSession) -> bool:
+    normalized_code = code.upper().replace("-", "").strip()
+    if not admin.totp_secret:
+        return False
+
+    totp = pyotp.TOTP(admin.totp_secret, interval=30, digits=6)
+    if totp.verify(code):
+        return True
+
+    if not admin.backup_codes:
+        return False
+
+    try:
+        hashed_codes = json.loads(admin.backup_codes)
+        code_hash = hashlib.sha256(normalized_code.encode()).hexdigest()
+        if code_hash not in hashed_codes:
+            return False
+        hashed_codes.remove(code_hash)
+        admin.backup_codes = json.dumps(hashed_codes)
+        await db.commit()
+        return True
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return False
+
+
+def _make_preauth_token(admin: Admin) -> str:
+    return create_access_token(
+        subject=admin.username,
+        role=admin.role,
+        expires_delta=timedelta(minutes=10),
+        extra={"type": "preauth"},
+    )
 
 
 @router.get("/ws-token")
@@ -45,17 +102,10 @@ async def ws_token(request: Request):
 @router.get("/login", response_class=HTMLResponse)
 @router.get("/login/", response_class=HTMLResponse)
 async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
-    settings = await BotSettingsService(db).get_all()
-    custom_logo = settings.get("custom_logo", "")
     return templates.TemplateResponse(
+        request,
         "login.html",
-        {
-            "request": request,
-            "error": None,
-            "app_name": config.web.app_name,
-            "app_version": config.web.app_version,
-            "custom_logo": custom_logo,
-        },
+        await _login_template_context(request, db),
     )
 
 
@@ -65,14 +115,7 @@ async def login_submit(
     username: str = Form(...), password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    settings = await BotSettingsService(db).get_all()
-    _error_ctx = {
-        "request": request,
-        "error": "Неверный логин или пароль",
-        "app_name": config.web.app_name,
-        "app_version": config.web.app_version,
-        "custom_logo": settings.get("custom_logo", ""),
-    }
+    error_ctx = await _login_template_context(request, db, error="Неверный логин или пароль")
 
     admin = None
     admin = await AdminService(db).authenticate(username, password)
@@ -102,14 +145,35 @@ async def login_submit(
         # Add delay to prevent timing attacks
         import asyncio
         await asyncio.sleep(1)
-        return templates.TemplateResponse("login.html", _error_ctx)
+        return templates.TemplateResponse(request, "login.html", error_ctx)
 
     if not admin.is_active:
-        return templates.TemplateResponse("login.html", {**_error_ctx, "error": "Аккаунт заблокирован"})
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            await _login_template_context(request, db, error="Аккаунт заблокирован"),
+        )
+
+    if admin.totp_secret:
+        resp = templates.TemplateResponse(
+            request,
+            "login.html",
+            await _login_template_context(request, db, show_2fa=True),
+        )
+        resp.set_cookie(
+            PREAUTH_COOKIE,
+            _make_preauth_token(admin),
+            httponly=True,
+            samesite="lax",
+            max_age=PREAUTH_MAX_AGE,
+        )
+        resp.delete_cookie(SESSION_COOKIE)
+        return resp
 
     token = create_access_token(subject=admin.username, role=admin.role)
     resp = RedirectResponse(url="/panel/", status_code=302)
     resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=86400)
+    resp.delete_cookie(PREAUTH_COOKIE)
     return resp
 
 
@@ -117,7 +181,7 @@ async def login_submit(
 async def logout():
     resp = RedirectResponse(url="/panel/login", status_code=302)
     resp.delete_cookie(SESSION_COOKIE)
-    resp.delete_cookie("vpn_preauth")
+    resp.delete_cookie(PREAUTH_COOKIE)
     return resp
 
 
@@ -134,46 +198,48 @@ async def twofa_login_submit(
     request: Request, code: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    from sqlalchemy import select
+    preauth = request.cookies.get(PREAUTH_COOKIE, "")
+    payload = decode_access_token_full(preauth) if preauth else None
+    if not payload or payload.get("type") != "preauth":
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            await _login_template_context(
+                request,
+                db,
+                error="Сначала введите логин и пароль",
+            ),
+        )
 
-    settings = await BotSettingsService(db).get_all()
-    _error_ctx = {
-        "request": request,
-        "error": "Неверный код 2FA",
-        "app_name": config.web.app_name,
-        "app_version": config.web.app_version,
-        "custom_logo": settings.get("custom_logo", ""),
-        "show_2fa": True,
-        "bot_language": settings.get("bot_language", "ru"),
-    }
+    admin = await AdminService(db).get_by_username(payload["sub"])
+    if not admin or not admin.is_active or not admin.totp_secret:
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            await _login_template_context(
+                request,
+                db,
+                error="Сессия 2FA истекла, войдите снова",
+            ),
+        )
 
-    result = await db.execute(select(Admin).where(Admin.is_active == True, Admin.totp_secret.isnot(None)))
-    admins_with_2fa = result.scalars().all()
+    if not await _verify_2fa_code(admin, code, db):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            await _login_template_context(
+                request,
+                db,
+                error="Неверный код 2FA",
+                show_2fa=True,
+            ),
+        )
 
-    for admin in admins_with_2fa:
-        totp = pyotp.TOTP(admin.totp_secret, interval=30, digits=6)
-        if totp.verify(code):
-            token = create_access_token(subject=admin.username, role=admin.role)
-            resp = RedirectResponse(url="/panel/", status_code=302)
-            resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=86400)
-            return resp
-
-        if admin.backup_codes:
-            try:
-                hashed_codes = json.loads(admin.backup_codes)
-                code_hash = hashlib.sha256(code.upper().replace("-", "").strip().encode()).hexdigest()
-                if code_hash in hashed_codes:
-                    hashed_codes.remove(code_hash)
-                    admin.backup_codes = json.dumps(hashed_codes)
-                    await db.commit()
-                    token = create_access_token(subject=admin.username, role=admin.role)
-                    resp = RedirectResponse(url="/panel/", status_code=302)
-                    resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=86400)
-                    return resp
-            except Exception:
-                pass
-
-    return templates.TemplateResponse("login.html", _error_ctx)
+    token = create_access_token(subject=admin.username, role=admin.role)
+    resp = RedirectResponse(url="/panel/", status_code=302)
+    resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=86400)
+    resp.delete_cookie(PREAUTH_COOKIE)
+    return resp
 
 
 @router.get("/2fa/setup")
@@ -220,7 +286,7 @@ async def twofa_activate(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.post("/2fa/verify")
 async def twofa_verify(request: Request, db: AsyncSession = Depends(get_db)):
-    preauth = request.cookies.get("vpn_preauth", "")
+    preauth = request.cookies.get(PREAUTH_COOKIE, "")
     if not preauth:
         return JSONResponse({"ok": False, "message": "Нет сессии"}, status_code=401)
     try:
@@ -236,29 +302,18 @@ async def twofa_verify(request: Request, db: AsyncSession = Depends(get_db)):
     if not admin or not admin.totp_secret:
         return JSONResponse({"ok": False, "message": "2FA не настроена"}, status_code=400)
 
-    used_backup = False
-    totp = pyotp.TOTP(admin.totp_secret, interval=30, digits=6)
-    if not totp.verify(code):
-        if admin.backup_codes:
-            try:
-                hashed_codes = json.loads(admin.backup_codes)
-                code_hash = hashlib.sha256(code.upper().replace("-", "").strip().encode()).hexdigest()
-                if code_hash in hashed_codes:
-                    hashed_codes.remove(code_hash)
-                    admin.backup_codes = json.dumps(hashed_codes)
-                    await db.commit()
-                    used_backup = True
-                else:
-                    return JSONResponse({"ok": False, "message": "Неверный код"}, status_code=400)
-            except (json.JSONDecodeError, ValueError):
-                return JSONResponse({"ok": False, "message": "Неверный код"}, status_code=400)
-        else:
-            return JSONResponse({"ok": False, "message": "Неверный код"}, status_code=400)
+    used_backup = bool(admin.backup_codes) and not pyotp.TOTP(
+        admin.totp_secret,
+        interval=30,
+        digits=6,
+    ).verify(code)
+    if not await _verify_2fa_code(admin, code, db):
+        return JSONResponse({"ok": False, "message": "Неверный код"}, status_code=400)
 
     token = create_access_token(subject=admin.username, role=admin.role)
     resp = JSONResponse({"ok": True, "message": "OK", "backup": used_backup})
     resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=86400)
-    resp.delete_cookie("vpn_preauth")
+    resp.delete_cookie(PREAUTH_COOKIE)
     return resp
 
 
@@ -298,7 +353,7 @@ async def export_backup_codes(request: Request, db: AsyncSession = Depends(get_d
     admin = await AdminService(db).get_by_username(admin_info["sub"])
     if not admin or not admin.totp_secret:
         return JSONResponse({"ok": False, "message": "2FA не настроена"}, status_code=400)
-    raw_codes = [_secrets.token_hex(4).upper() for _ in range(8)]
+    raw_codes = [secrets.token_hex(4).upper() for _ in range(8)]
     hashed_codes = [hashlib.sha256(c.encode()).hexdigest() for c in raw_codes]
     admin.backup_codes = json.dumps(hashed_codes)
     await db.commit()
