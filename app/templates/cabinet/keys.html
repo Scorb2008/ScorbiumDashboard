@@ -1,90 +1,77 @@
 {% extends "cabinet/base.html" %}
 {% block title %}Подписки - {{ app_name }}{% endblock %}
 {% block content %}
-<div class="dash-stack">
-  <div class="section-header">
-    <h2>Подписки и ключи</h2>
-    <div class="hero-actions">
-      <a href="/cabinet/plans" class="btn-accent"><i class="bi bi-stars"></i> Купить</a>
-      <a href="/cabinet/guides" class="btn-outline"><i class="bi bi-phone"></i> Инструкции</a>
+<div class="stack-lg">
+  <div class="page-header">
+    <h2>Подписки</h2>
+    <div class="flex gap-2">
+      <a href="/cabinet/plans" class="btn btn-primary"><i class="bi bi-stars"></i> Купить</a>
+      <a href="/cabinet/guides" class="btn btn-outline"><i class="bi bi-phone"></i> Инструкции</a>
     </div>
   </div>
 
   {% if keys %}
-  <div class="dash-stack">
+  <div class="grid-auto">
     {% for key in keys %}
     {% set traffic_total = (key.download or 0) + (key.upload or 0) %}
-    <article class="key-detail-card">
-      <div class="key-detail-header">
+    <div class="key-card">
+      <div class="key-header">
         <div>
-          <div class="key-detail-name">{{ key.name or 'VPN подписка' }}</div>
-          <div class="key-detail-id">{{ key.pasarguard_key_id or '' }}</div>
+          <div class="key-name">{{ key.name or 'VPN подписка' }}</div>
+          <div class="key-sub">{{ key.pasarguard_key_id or '' }}</div>
         </div>
         {% if key.status == 'active' %}
-        <span class="badge-active">Активна</span>
+        <span class="badge badge-success">Активна</span>
         {% elif key.status == 'expired' %}
-        <span class="badge-expired">Истекла</span>
+        <span class="badge badge-danger">Истекла</span>
         {% else %}
-        <span class="badge-pending">Отключена</span>
+        <span class="badge badge-warning">Откл.</span>
         {% endif %}
       </div>
-
-      <div class="key-detail-body">
-        <div class="key-detail-row">
-          <span class="detail-label">Создан</span>
-          <span class="detail-value">{{ key.created_at.strftime('%d.%m.%Y') if key.created_at else '—' }}</span>
+      <div class="key-body">
+        <div class="key-row">
+          <span class="key-label">Создан</span>
+          <span class="key-value">{{ key.created_at.strftime('%d.%m.%Y') if key.created_at else '—' }}</span>
         </div>
-        <div class="key-detail-row">
-          <span class="detail-label">Действует до</span>
-          <span class="detail-value">{% if key.expires_at %}{{ key.expires_at.strftime('%d.%m.%Y %H:%M') }}{% else %}∞{% endif %}</span>
+        <div class="key-row">
+          <span class="key-label">Действует до</span>
+          <span class="key-value">{{ key.expires_at.strftime('%d.%m.%Y %H:%M') if key.expires_at else '∞' }}</span>
         </div>
-        <div class="key-detail-row">
-          <span class="detail-label">Цена</span>
-          <span class="detail-value">{% if key.price is not none %}{{ "%.2f"|format(key.price) }} ₽{% else %}—{% endif %}</span>
+        <div class="key-row">
+          <span class="key-label">Цена</span>
+          <span class="key-value">{{ "%.2f"|format(key.price) }} ₽</span>
         </div>
-        <div class="key-detail-row">
-          <span class="detail-label">Трафик</span>
-          <span class="detail-value">
-            {% if traffic_total >= 1073741824 %}
-            {{ "%.1f"|format(traffic_total / 1073741824) }} GB
-            {% elif traffic_total >= 1048576 %}
-            {{ "%.0f"|format(traffic_total / 1048576) }} MB
-            {% else %}
-            {{ "%.0f"|format(traffic_total / 1024) }} KB
-            {% endif %}
+        <div class="key-row">
+          <span class="key-label">Трафик</span>
+          <span class="key-value">
+            {% if traffic_total >= 1073741824 %}{{ "%.1f"|format(traffic_total / 1073741824) }} GB
+            {% elif traffic_total >= 1048576 %}{{ "%.0f"|format(traffic_total / 1048576) }} MB
+            {% else %}{{ "%.0f"|format(traffic_total / 1024) }} KB{% endif %}
           </span>
         </div>
       </div>
-
-      <div class="key-detail-footer">
+      <div class="key-footer">
         {% if key.access_url and key.access_url != 'pending' %}
         <div class="copy-row">
-          <input type="text" class="form-input" value="{{ key.access_url }}" readonly>
-          <button type="button" class="btn-accent" onclick="copyText({{ key.access_url|tojson }}, 'Ссылка скопирована')">
-            <i class="bi bi-copy"></i>
-          </button>
-          <button type="button" class="btn-outline" onclick="openExternal({{ key.access_url|tojson }})">
-            <i class="bi bi-box-arrow-up-right"></i>
-          </button>
+          <input type="text" class="input" value="{{ key.access_url }}" readonly>
+          <button class="btn btn-primary" onclick="copyText({{ key.access_url|tojson }}, 'Ссылка скопирована')"><i class="bi bi-copy"></i></button>
+          <button class="btn btn-outline" onclick="openExternal({{ key.access_url|tojson }})"><i class="bi bi-box-arrow-up-right"></i></button>
         </div>
         {% else %}
-        <div class="info-card">
+        <div class="info-banner">
           <i class="bi bi-hourglass-split text-success"></i>
-          <div>
-            <strong>Ключ подготавливается</strong>
-            <div class="muted">Ссылка появится автоматически</div>
-          </div>
+          <div><strong>Подготовка</strong><span class="muted">Ключ появится автоматически</span></div>
         </div>
         {% endif %}
       </div>
-    </article>
+    </div>
     {% endfor %}
   </div>
   {% else %}
-  <div class="empty-state">
-    <div class="empty-illustration"><i class="bi bi-key"></i></div>
-    <p>У вас пока нет подписок</p>
-    <a href="/cabinet/plans" class="btn-accent">Выбрать тариф</a>
+  <div class="empty">
+    <div class="empty-icon"><i class="bi bi-key"></i></div>
+    <p>Нет подписок</p>
+    <a href="/cabinet/plans" class="btn btn-primary" style="margin-top:12px">Выбрать тариф</a>
   </div>
   {% endif %}
 </div>

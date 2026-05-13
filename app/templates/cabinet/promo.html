@@ -1,13 +1,13 @@
 {% extends "cabinet/base.html" %}
 {% block title %}Промокод — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="dash-stack">
-  <h2>Промокод</h2>
+<div class="stack-lg">
+  <div class="page-header"><h2>Промокод</h2></div>
 
-  <div class="promo-card">
-    <form onsubmit="return applyPromo(event)" class="dash-stack">
-      <input type="text" id="promo-code" class="form-input" placeholder="Введите промокод" required autocomplete="off">
-      <button type="submit" class="btn-accent w-100">Активировать</button>
+  <div class="card">
+    <form onsubmit="return applyPromo(event)" class="stack">
+      <input type="text" id="promo-code" class="input" placeholder="Введите промокод" required autocomplete="off">
+      <button type="submit" class="btn btn-primary w-full">Активировать</button>
       <div id="promo-result"></div>
     </form>
   </div>
@@ -16,13 +16,13 @@
 <script>
 async function applyPromo(event) {
   event.preventDefault();
-  const code = document.getElementById('promo-code').value.trim();
-  const result = document.getElementById('promo-result');
-  const fd = new FormData();
+  var code = document.getElementById('promo-code').value.trim();
+  var result = document.getElementById('promo-result');
+  var fd = new FormData();
   fd.append('code', code);
   try {
-    const response = await cabinetJson('/cabinet/promo/apply', {method:'POST', body:fd});
-    setMsg(result, response.data.ok, response.data.message || 'Ошибка');
+    var r = await cabinetJson('/cabinet/promo/apply', {method:'POST', body:fd});
+    setMsg(result, r.data.ok, r.data.message || 'Ошибка');
   } catch(e) { setMsg(result, false, 'Ошибка сети'); }
 }
 </script>

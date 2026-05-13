@@ -3,107 +3,80 @@
 {% block content %}
 {% set bot_username = settings.get('bot_username', '') %}
 {% set referral_link = 'https://t.me/' ~ bot_username ~ '?start=' ~ user.referral_code if bot_username and user.referral_code else '' %}
-<div class="dash-stack">
-  <div class="section-header">
-    <h2>Реферальная программа</h2>
-  </div>
+<div class="stack-lg">
+  <div class="page-header"><h2>Рефералы</h2></div>
 
-  <div class="hero-panel">
-    <div class="hero-grid">
-      <div class="hero-copy">
-        <div class="eyebrow">
-          <i class="bi bi-people"></i>
-          <span>Приглашайте друзей</span>
-        </div>
-        <div class="hero-actions">
-          {% if referral_link %}
-          <button type="button" class="btn-accent" onclick="copyText({{ referral_link|tojson }}, 'Ссылка скопирована')">
-            <i class="bi bi-copy"></i> Копировать ссылку
-          </button>
-          {% endif %}
-        </div>
+  <div class="grid-3">
+    <div class="card-sm stat-block">
+      <div class="stat-icon"><i class="bi bi-people"></i></div>
+      <div>
+        <div class="stat-value">{{ referrals|length }}</div>
+        <div class="stat-label">Приглашено</div>
       </div>
-
-      <div class="hero-aside">
-        <div class="summary-card">
-          <small>Приглашено</small>
-          <strong>{{ referrals|length }}</strong>
-        </div>
-        <div class="summary-card">
-          <small>Ваш код</small>
-          <strong>{{ user.referral_code or '—' }}</strong>
-        </div>
+    </div>
+    <div class="card-sm stat-block">
+      <div class="stat-icon"><i class="bi bi-code"></i></div>
+      <div>
+        <div class="stat-value">{{ user.referral_code or '—' }}</div>
+        <div class="stat-label">Ваш код</div>
       </div>
+    </div>
+    <div class="card-sm" style="display:flex;align-items:center;gap:8px;padding:10px 14px">
+      {% if referral_link %}
+      <button class="btn btn-primary w-full" onclick="copyText({{ referral_link|tojson }}, 'Ссылка скопирована')">
+        <i class="bi bi-copy"></i> Копировать ссылку
+      </button>
+      {% endif %}
     </div>
   </div>
 
   {% if referral_link %}
-  <div class="section-panel">
-    <div class="copy-row">
-      <input type="text" class="form-input" value="{{ referral_link }}" readonly>
-      <button type="button" class="btn-accent" onclick="copyText({{ referral_link|tojson }}, 'Ссылка скопирована')">
-        <i class="bi bi-copy"></i>
-      </button>
-      <button type="button" class="btn-outline" onclick="openExternal({{ referral_link|tojson }})">
-        <i class="bi bi-box-arrow-up-right"></i>
-      </button>
-    </div>
+  <div class="copy-row">
+    <input type="text" class="input" value="{{ referral_link }}" readonly>
+    <button class="btn btn-primary" onclick="copyText({{ referral_link|tojson }}, 'Ссылка скопирована')"><i class="bi bi-copy"></i></button>
+    <button class="btn btn-outline" onclick="openExternal({{ referral_link|tojson }})"><i class="bi bi-box-arrow-up-right"></i></button>
   </div>
   {% endif %}
 
-  <section class="section-panel">
-    <div class="section-header">
-      <h3 class="section-title">Мои приглашения</h3>
-    </div>
-
+  <div class="card">
+    <h3 style="margin:0 0 12px;font-size:.9rem">Приглашения</h3>
     {% if referrals %}
-    <div class="dash-stack">
+    <div>
       {% for ref in referrals %}
-      <div class="referral-row">
+      <div class="ref-row">
         <div>
           <strong>ID {{ ref.referred_id }}</strong>
-          <div class="muted">{{ ref.created_at.strftime('%d.%m.%Y') if ref.created_at else '—' }}</div>
+          <div class="text-muted" style="font-size:.75rem">{{ ref.created_at.strftime('%d.%m.%Y') if ref.created_at else '—' }}</div>
         </div>
-        <div class="cluster">
-          <span class="status-chip {% if ref.is_paid %}status-active{% else %}status-pending{% endif %}">
-            {% if ref.is_paid %}Начислен{% else %}Ожидает{% endif %}
-          </span>
-        </div>
+        <span class="badge badge-{{ 'success' if ref.is_paid else 'warning' }}">
+          {{ 'Начислен' if ref.is_paid else 'Ожидает' }}
+        </span>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state">
-      <div class="empty-illustration"><i class="bi bi-megaphone"></i></div>
-      <p>Пока нет приглашений</p>
-    </div>
+    <div class="empty"><div class="empty-icon"><i class="bi bi-megaphone"></i></div><p>Пока нет приглашений</p></div>
     {% endif %}
-  </section>
+  </div>
 
-  <section class="section-panel">
-    <div class="section-header">
-      <h3 class="section-title">Топ рефереров</h3>
-    </div>
-
+  <div class="card">
+    <h3 style="margin:0 0 12px;font-size:.9rem">Топ рефереров</h3>
     {% if top_referrers %}
-    <div class="dash-stack">
+    <div class="stack">
       {% for ref in top_referrers %}
       <div class="top-row">
         <div class="top-pos">{{ loop.index }}</div>
         <div>
           <strong>{{ ref.full_name or ref.username or ('ID ' ~ ref.user_id) }}</strong>
-          <div class="muted">{% if ref.username %}@{{ ref.username }}{% endif %}</div>
+          <div class="text-muted" style="font-size:.75rem">{% if ref.username %}@{{ ref.username }}{% endif %}</div>
         </div>
         <div class="top-count">{{ ref.referral_count }}</div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state">
-      <div class="empty-illustration"><i class="bi bi-trophy"></i></div>
-      <p>Топ пока пуст</p>
-    </div>
+    <div class="empty"><div class="empty-icon"><i class="bi bi-trophy"></i></div><p>Топ пуст</p></div>
     {% endif %}
-  </section>
+  </div>
 </div>
 {% endblock %}

@@ -1,142 +1,87 @@
 {% extends "cabinet/base.html" %}
 {% block title %}Профиль - {{ app_name }}{% endblock %}
 {% block content %}
-<div class="dash-stack">
-  <section class="profile-card profile-card-hero">
-    <div class="profile-hero-grid">
-      <div class="profile-hero-main">
-        <div class="profile-hero">
-          <div class="profile-avatar">{{ (user.full_name or user.username or 'U')[:1]|upper }}</div>
-          <div>
-            <div class="profile-name">{{ user.full_name or 'Пользователь' }}</div>
-            <div class="profile-username">{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</div>
-          </div>
-        </div>
-        <p class="profile-lead">Личный кабинет, история оплаты, ключи и реферальная активность в одном месте.</p>
-        <div class="profile-summary-strip">
-          <div class="hero-kpi"><small>Баланс</small><strong>{{ "%.2f"|format(user.balance) }} ₽</strong></div>
-          <div class="hero-kpi"><small>Подписки</small><strong>{{ keys|length }}</strong></div>
-          <div class="hero-kpi"><small>Платежи</small><strong>{{ payments|length }}</strong></div>
-          <div class="hero-kpi"><small>Рефералы</small><strong>{{ referrals_count }}</strong></div>
-        </div>
-        <div class="hero-actions">
-          <a href="/cabinet/referrals" class="btn-outline"><i class="bi bi-people"></i> Рефералы</a>
-          <a href="/cabinet/language" class="btn-outline"><i class="bi bi-translate"></i> Язык</a>
-          <a href="/cabinet/balance" class="btn-accent"><i class="bi bi-wallet2"></i> Баланс</a>
-        </div>
-      </div>
-
-      <aside class="profile-side-card">
-        <div class="hero-focus-label">Состояние аккаунта</div>
-        <div class="hero-focus-rows">
-          <div class="hero-focus-row">
-            <span>Статус</span>
-            <strong>{% if user.is_banned %}Заблокирован{% else %}Активен{% endif %}</strong>
-          </div>
-          <div class="hero-focus-row">
-            <span>Активность</span>
-            <strong>{% if user.last_seen %}{{ user.last_seen.strftime('%d.%m.%Y') }}{% else %}Сегодня{% endif %}</strong>
-          </div>
-          <div class="hero-focus-row">
-            <span>Telegram</span>
-            <strong>{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</strong>
-          </div>
-        </div>
-      </aside>
-    </div>
-  </section>
-
-  <section class="quick-action-grid">
-    <a href="/cabinet/keys" class="quick-action-card">
-      <span class="stat-icon"><i class="bi bi-key"></i></span>
+<div class="stack-lg">
+  <div class="card">
+    <div class="profile-row">
+      <div class="profile-avatar">{{ (user.full_name or user.username or 'U')[:1]|upper }}</div>
       <div>
-        <div class="quick-action-label">Мои ключи</div>
-        <div class="quick-action-text">Управление доступами и копирование ссылок</div>
+        <div class="profile-name">{{ user.full_name or 'Пользователь' }}</div>
+        <div class="profile-sub">{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</div>
       </div>
-    </a>
-    <a href="/cabinet/balance" class="quick-action-card">
-      <span class="stat-icon"><i class="bi bi-wallet2"></i></span>
-      <div>
-        <div class="quick-action-label">Платежи</div>
-        <div class="quick-action-text">Пополнение баланса и история операций</div>
-      </div>
-    </a>
-    <a href="/cabinet/referrals" class="quick-action-card">
-      <span class="stat-icon"><i class="bi bi-people"></i></span>
-      <div>
-        <div class="quick-action-label">Рефералы</div>
-        <div class="quick-action-text">Код, приглашения и статистика переходов</div>
-      </div>
-    </a>
-    <a href="/cabinet/support" class="quick-action-card">
-      <span class="stat-icon"><i class="bi bi-chat-left-dots"></i></span>
-      <div>
-        <div class="quick-action-label">Поддержка</div>
-        <div class="quick-action-text">Создать обращение и посмотреть ответы</div>
-      </div>
-    </a>
-  </section>
-
-  <section class="section-panel">
-    <div class="section-header">
-      <h2>Последние подписки</h2>
-      <a href="/cabinet/keys" class="btn-outline">Все</a>
     </div>
+  </div>
 
-    {% if keys %}
-    <div class="dash-stack">
-      {% for key in keys[:4] %}
-      <div class="key-card {% if key.status != 'active' %}expired{% endif %}">
-        <div>
-          <div class="key-name">{{ key.name or 'VPN подписка' }}</div>
-          <div class="key-meta">
-            <span>{% if key.expires_at %}до {{ key.expires_at.strftime('%d.%m.%Y') }}{% else %}без срока{% endif %}</span>
-            <span>{{ key.status }}</span>
-          </div>
+  <div class="grid-3">
+    <div class="card-sm stat-block">
+      <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
+      <div>
+        <div class="stat-value">{{ "%.2f"|format(user.balance) }} ₽</div>
+        <div class="stat-label">Баланс</div>
+      </div>
+    </div>
+    <div class="card-sm stat-block">
+      <div class="stat-icon"><i class="bi bi-key"></i></div>
+      <div>
+        <div class="stat-value">{{ keys|length }}</div>
+        <div class="stat-label">Подписки</div>
+      </div>
+    </div>
+    <div class="card-sm stat-block">
+      <div class="stat-icon"><i class="bi bi-people"></i></div>
+      <div>
+        <div class="stat-value">{{ referrals_count }}</div>
+        <div class="stat-label">Рефералы</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex gap-2" style="flex-wrap:wrap">
+    <a href="/cabinet/referrals" class="btn btn-outline"><i class="bi bi-people"></i> Рефералы</a>
+    <a href="/cabinet/language" class="btn btn-outline"><i class="bi bi-translate"></i> Язык</a>
+    <a href="/cabinet/balance" class="btn btn-primary"><i class="bi bi-wallet2"></i> Баланс</a>
+  </div>
+
+  <div class="page-header"><h2>Подписки</h2><a href="/cabinet/keys" class="btn btn-outline">Все</a></div>
+  {% if keys %}
+  <div class="stack">
+    {% for key in keys[:4] %}
+    <div class="card-flat flex items-center justify-between gap-2" style="{% if key.status != 'active' %}opacity:.6{% endif %}">
+      <div>
+        <div style="font-weight:700;font-size:.88rem">{{ key.name or 'VPN подписка' }}</div>
+        <div class="text-muted" style="font-size:.78rem">
+          {% if key.expires_at %}до {{ key.expires_at.strftime('%d.%m.%Y') }}{% else %}без срока{% endif %}
         </div>
-        {% if key.access_url and key.access_url != 'pending' %}
-        <button type="button" class="btn-outline" onclick="copyText({{ key.access_url|tojson }}, 'Ссылка скопирована')">
-          <i class="bi bi-copy"></i>
-        </button>
-        {% endif %}
       </div>
-      {% endfor %}
+      {% if key.access_url and key.access_url != 'pending' %}
+      <button class="btn btn-outline" onclick="copyText({{ key.access_url|tojson }}, 'Ссылка скопирована')">
+        <i class="bi bi-copy"></i>
+      </button>
+      {% endif %}
     </div>
-    {% else %}
-    <div class="empty-state">
-      <div class="empty-illustration"><i class="bi bi-key"></i></div>
-      <p>Нет активных подписок</p>
-    </div>
-    {% endif %}
-  </section>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty"><div class="empty-icon"><i class="bi bi-key"></i></div><p>Нет подписок</p></div>
+  {% endif %}
 
-  <section class="section-panel">
-    <div class="section-header">
-      <h2>Последние платежи</h2>
-      <a href="/cabinet/balance" class="btn-outline">История</a>
-    </div>
-
-    {% if payments %}
-    <div class="dash-stack">
-      {% for p in payments[:6] %}
-      <div class="payment-row">
-        <div class="payment-info">
-          <span class="payment-amount {% if p.status == 'succeeded' %}text-success{% elif p.status == 'failed' %}text-danger{% endif %}">
-            {{ "%.2f"|format(p.amount) }} ₽
-          </span>
-          <span class="payment-provider">{{ p.provider }}</span>
-          <span class="payment-date">{{ p.created_at.strftime('%d.%m.%Y') }}</span>
-        </div>
-        <span class="status-chip status-{{ p.status }}">{{ p.status }}</span>
+  <div class="page-header"><h2>Платежи</h2><a href="/cabinet/balance" class="btn btn-outline">История</a></div>
+  {% if payments %}
+  <div class="stack">
+    {% for p in payments[:6] %}
+    <div class="payment-row">
+      <div class="payment-info">
+        <span class="payment-amount {% if p.status == 'succeeded' %}text-success{% elif p.status == 'failed' %}text-danger{% endif %}">
+          {{ "%.2f"|format(p.amount) }} ₽
+        </span>
+        <span class="payment-date">{{ p.created_at.strftime('%d.%m.%Y') }}</span>
       </div>
-      {% endfor %}
+      <span class="badge badge-{{ 'success' if p.status == 'succeeded' else 'danger' if p.status == 'failed' else 'warning' }}">{{ p.status }}</span>
     </div>
-    {% else %}
-    <div class="empty-state">
-      <div class="empty-illustration"><i class="bi bi-receipt"></i></div>
-      <p>Платежей пока нет</p>
-    </div>
-    {% endif %}
-  </section>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty"><div class="empty-icon"><i class="bi bi-receipt"></i></div><p>Платежей нет</p></div>
+  {% endif %}
 </div>
 {% endblock %}

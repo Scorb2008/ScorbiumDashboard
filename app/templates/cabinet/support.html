@@ -1,90 +1,65 @@
 {% extends "cabinet/base.html" %}
 {% block title %}Поддержка - {{ app_name }}{% endblock %}
 {% block content %}
-<div class="dash-stack">
-  <div class="section-header">
-    <h2>Поддержка</h2>
-  </div>
+<div class="stack-lg">
+  <div class="page-header"><h2>Поддержка</h2></div>
 
-  <section class="section-panel">
-    <div class="section-header">
-      <h3 class="section-title">Новое обращение</h3>
-    </div>
-
-    <form onsubmit="return createTicket(event)">
-      <div class="dash-stack">
-        <input type="text" id="ticket-subject" class="form-input" placeholder="Тема обращения" required>
-        <textarea id="ticket-text" class="form-input" rows="3" placeholder="Опишите проблему..." required></textarea>
-        <div class="action-row">
-          <button type="submit" class="btn-accent"><i class="bi bi-send"></i> Отправить</button>
-          <div id="ticket-result"></div>
-        </div>
+  <div class="card">
+    <h3 style="margin:0 0 12px;font-size:.95rem">Новое обращение</h3>
+    <form onsubmit="return createTicket(event)" class="stack">
+      <input type="text" id="ticket-subject" class="input" placeholder="Тема" required>
+      <textarea id="ticket-text" class="input" rows="3" placeholder="Опишите проблему..." required></textarea>
+      <div class="flex items-center gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i> Отправить</button>
+        <div id="ticket-result"></div>
       </div>
     </form>
-  </section>
+  </div>
 
-  <section class="section-panel">
-    <div class="section-header">
-      <h3 class="section-title">Мои обращения</h3>
-    </div>
-
-    {% if tickets %}
-    <div class="dash-stack">
-      {% for t in tickets %}
-      <a href="/cabinet/support/{{ t.id }}" class="ticket-row">
-        <div>
-          <div class="ticket-subject">{{ t.subject }}</div>
-          <div class="ticket-info">
-            <span class="ticket-date">{{ t.created_at.strftime('%d.%m.%Y') }}</span>
-            <span class="muted">{{ t.messages|length }} сообщ.</span>
-          </div>
+  {% if tickets %}
+  <div class="stack">
+    {% for t in tickets %}
+    <a href="/cabinet/support/{{ t.id }}" class="ticket-row">
+      <div>
+        <div class="ticket-subject">{{ t.subject }}</div>
+        <div class="ticket-meta">
+          <span>{{ t.created_at.strftime('%d.%m.%Y') }}</span>
+          <span>{{ t.messages|length }} сообщ.</span>
         </div>
-        <span class="status-chip status-{{ t.status if t.status else 'open' }}">
-          {{ t.status if t.status else 'open' }}
-        </span>
-      </a>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty-state">
-      <div class="empty-illustration"><i class="bi bi-chat-left-text"></i></div>
-      <p>Нет обращений</p>
-    </div>
-    {% endif %}
-  </section>
+      </div>
+      <span class="badge badge-{{ 'success' if t.status == 'closed' else 'warning' if t.status == 'in_progress' else 'warning' }}">
+        {{ t.status if t.status else 'open' }}
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon"><i class="bi bi-chat-left-text"></i></div>
+    <p>Нет обращений</p>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 async function createTicket(event) {
   event.preventDefault();
-
   var subject = document.getElementById('ticket-subject').value.trim();
   var text = document.getElementById('ticket-text').value.trim();
   var resultBox = document.getElementById('ticket-result');
-  var formData = new FormData();
-  formData.append('subject', subject);
-  formData.append('text', text);
-
+  var fd = new FormData();
+  fd.append('subject', subject);
+  fd.append('text', text);
   try {
-    var result = await cabinetJson('/cabinet/support/create', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (result.data.ok) {
-      setMsg(resultBox, true, 'Обращение создано');
-      setTimeout(function() {
-        window.location.href = cabinetUrl('/cabinet/support/' + result.data.ticket_id);
-      }, 700);
-      return false;
+    var r = await cabinetJson('/cabinet/support/create', {method:'POST', body:fd});
+    if (r.data.ok) {
+      setMsg(resultBox, true, 'Создано');
+      setTimeout(function() { window.location.href = cabinetUrl('/cabinet/support/' + r.data.ticket_id); }, 700);
+    } else {
+      setMsg(resultBox, false, r.data.message || 'Ошибка');
     }
-
-    setMsg(resultBox, false, result.data.message || 'Не удалось создать обращение');
-  } catch (error) {
-    setMsg(resultBox, false, 'Ошибка сети');
-  }
-
+  } catch (e) { setMsg(resultBox, false, 'Ошибка сети'); }
   return false;
 }
 {% endblock %}

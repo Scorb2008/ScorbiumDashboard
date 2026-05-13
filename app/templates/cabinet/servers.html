@@ -1,14 +1,14 @@
 {% extends "cabinet/base.html" %}
 {% block title %}Серверы — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="dash-stack">
-  <h2>Серверы</h2>
+<div class="stack-lg">
+  <div class="page-header"><h2>Серверы</h2></div>
 
   {% if hosts %}
-  <div class="dash-stack">
+  <div class="stack">
     {% for host in hosts %}
     <div class="server-card">
-      <div class="server-info">
+      <div>
         <div class="server-name">{{ host.get('name', 'Сервер') }}</div>
         <div class="server-location">{{ host.get('location', '') }}</div>
       </div>
@@ -20,9 +20,9 @@
     {% endfor %}
   </div>
   {% else %}
-  <div class="empty-state">
-    <div class="empty-illustration"><i class="bi bi-server"></i></div>
-    <p>Информация о серверах недоступна</p>
+  <div class="empty">
+    <div class="empty-icon"><i class="bi bi-server"></i></div>
+    <p>Информация недоступна</p>
   </div>
   {% endif %}
 </div>

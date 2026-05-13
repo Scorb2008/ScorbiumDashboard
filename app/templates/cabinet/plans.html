@@ -1,85 +1,60 @@
 {% extends "cabinet/base.html" %}
 {% block title %}Тарифы - {{ app_name }}{% endblock %}
 {% block content %}
-<div class="dash-stack">
-  <div class="section-header plans-toolbar">
-    <div>
-      <div class="eyebrow"><i class="bi bi-stars"></i><span>Тарифы</span></div>
-      <h2>Выберите подписку</h2>
-    </div>
-    <div class="balance-chip">
-      <small>Баланс</small>
-      <strong>{{ "%.2f"|format(user.balance) }} ₽</strong>
+<div class="stack-lg">
+  <div class="page-header">
+    <h2>Тарифы</h2>
+    <div class="flex items-center gap-2">
+      <span class="text-muted" style="font-size:.85rem">Баланс:</span>
+      <strong style="color:var(--accent)">{{ "%.2f"|format(user.balance) }} ₽</strong>
     </div>
   </div>
 
-  <section class="plans-list">
+  <div class="plans-grid">
     {% for plan in plans %}
-    <article class="plan-full-card">
-      <div class="eyebrow">
-        <i class="bi bi-lightning-charge"></i>
-        <span>{{ plan.duration_days }} дней</span>
-      </div>
-      <div class="plan-full-header">
-        <h3>{{ plan.name }}</h3>
-        <div class="plan-full-price">{{ "%.0f"|format(plan.price) }} ₽</div>
-      </div>
-      {% if plan.description %}
-      <div class="plan-full-desc">{{ plan.description }}</div>
-      {% endif %}
-      <div class="plan-full-actions">
-        <button type="button" class="btn-accent" onclick="payBalance({{ plan.id }})">
+    <div class="plan-card">
+      <div class="plan-eyebrow"><i class="bi bi-lightning-charge"></i>{{ plan.duration_days }} дней</div>
+      <div class="plan-name">{{ plan.name }}</div>
+      <div class="plan-price">{{ "%.0f"|format(plan.price) }} ₽</div>
+      {% if plan.description %}<div class="plan-desc">{{ plan.description }}</div>{% endif %}
+      <div class="stack" style="margin-top:auto">
+        <button class="btn btn-primary w-full" onclick="payBalance({{ plan.id }})">
           <i class="bi bi-wallet2"></i> С баланса
         </button>
-        <button type="button" class="btn-outline" onclick="payYooKassa({{ plan.id }})">
+        <button class="btn btn-outline w-full" onclick="payYooKassa({{ plan.id }})">
           <i class="bi bi-credit-card-2-front"></i> Картой
         </button>
       </div>
-    </article>
+    </div>
     {% else %}
-    <div class="empty-state">
-      <div class="empty-illustration"><i class="bi bi-emoji-frown"></i></div>
+    <div class="empty">
+      <div class="empty-icon"><i class="bi bi-emoji-frown"></i></div>
       <p>Тарифы временно недоступны</p>
     </div>
     {% endfor %}
-  </section>
+  </div>
 
-  <div class="info-card">
+  <div class="info-banner">
     <i class="bi bi-info-circle text-success"></i>
-    <div>
-      <strong>Нужно пополнение?</strong>
-      <div class="muted">Откройте раздел <a href="/cabinet/balance">«Баланс»</a> и выберите способ оплаты.</div>
-    </div>
+    <div><strong>Пополнить баланс</strong><span class="muted">Перейдите в раздел «Баланс»</span></div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 async function payBalance(planId) {
-  var formData = new FormData();
-  formData.append('plan_id', planId);
-
+  var fd = new FormData();
+  fd.append('plan_id', planId);
   try {
-    var result = await cabinetJson('/cabinet/pay/balance', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (result.data.ok) {
-      showToast(result.data.message || 'Подписка оформлена', 'success');
-      setTimeout(function() {
-        window.location.href = cabinetUrl('/cabinet/keys');
-      }, 900);
-      return;
+    var r = await cabinetJson('/cabinet/pay/balance', {method:'POST', body:fd});
+    if (r.data.ok) {
+      showToast(r.data.message || 'Подписка оформлена', 'success');
+      setTimeout(function() { window.location.href = cabinetUrl('/cabinet/keys'); }, 900);
+    } else {
+      showToast(r.data.message || 'Ошибка', 'error');
     }
-
-    showToast(result.data.message || 'Не удалось оформить подписку', 'error');
-  } catch (error) {
-    showToast('Ошибка сети', 'error');
-  }
+  } catch (e) { showToast('Ошибка сети', 'error'); }
 }
 
-function payYooKassa() {
-  showToast('Оплата картой будет доступна позже', 'info');
-}
+function payYooKassa() { showToast('Оплата картой будет доступна позже', 'info'); }
 {% endblock %}

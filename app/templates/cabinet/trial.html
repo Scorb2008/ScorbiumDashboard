@@ -1,43 +1,42 @@
 {% extends "cabinet/base.html" %}
 {% block title %}Пробный период — {{ app_name }}{% endblock %}
 {% block content %}
-<div class="dash-stack">
-  <h2>Пробный период</h2>
+<div class="stack-lg">
+  <div class="page-header"><h2>Пробный период</h2></div>
 
   {% if trial_enabled and not has_keys %}
-  <div class="trial-card">
-    <div class="trial-icon"><i class="bi bi-gift-fill"></i></div>
-    <h3 class="trial-title">{{ trial_days }} дней бесплатно</h3>
-    <button class="btn-accent" onclick="activateTrial()">Активировать</button>
-    <div id="trial-result" style="font-size:.85rem"></div>
+  <div class="card" style="text-align:center;padding:32px 20px">
+    <div style="font-size:2.4rem;margin-bottom:10px;color:var(--warning)"><i class="bi bi-gift-fill"></i></div>
+    <h3 style="margin:0 0 6px;font-family:'Space Grotesk',sans-serif">{{ trial_days }} дней бесплатно</h3>
+    <div style="margin-bottom:16px;color:var(--text-muted);font-size:.88rem">Полный доступ без оплаты</div>
+    <button class="btn btn-primary" onclick="activateTrial()">Активировать</button>
+    <div id="trial-result" style="margin-top:10px;font-size:.85rem"></div>
   </div>
   {% elif has_keys %}
-  <div class="info-card">
+  <div class="info-banner">
     <i class="bi bi-check-circle text-success"></i>
     <span>Пробный период недоступен — у вас уже есть подписки</span>
   </div>
   {% else %}
-  <div class="info-card">
+  <div class="info-banner">
     <i class="bi bi-x-circle text-danger"></i>
-    <span>Пробный период временно отключён</span>
+    <span>Пробный период отключён</span>
   </div>
   {% endif %}
 </div>
 
 <script>
 async function activateTrial() {
-  const result = document.getElementById('trial-result');
+  var r = document.getElementById('trial-result');
   try {
-    const response = await cabinetJson('/cabinet/trial/activate', {method:'POST'});
-    if (response.data.ok) {
-      setMsg(result, true, response.data.message || 'OK');
+    var res = await cabinetJson('/cabinet/trial/activate', {method:'POST'});
+    if (res.data.ok) {
+      setMsg(r, true, res.data.message || 'OK');
       setTimeout(function() { location.reload(); }, 1500);
     } else {
-      setMsg(result, false, response.data.message || 'Ошибка');
+      setMsg(r, false, res.data.message || 'Ошибка');
     }
-  } catch(e) {
-    setMsg(result, false, 'Ошибка сети');
-  }
+  } catch(e) { setMsg(r, false, 'Ошибка сети'); }
 }
 </script>
 {% endblock %}
