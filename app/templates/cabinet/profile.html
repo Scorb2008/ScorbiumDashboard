@@ -2,47 +2,79 @@
 {% block title %}Профиль - {{ app_name }}{% endblock %}
 {% block content %}
 <div class="dash-stack">
-  <section class="profile-card">
-    <div class="profile-hero">
-      <div class="profile-avatar">{{ (user.full_name or user.username or 'U')[:1]|upper }}</div>
+  <section class="profile-card profile-card-hero">
+    <div class="profile-hero-grid">
+      <div class="profile-hero-main">
+        <div class="profile-hero">
+          <div class="profile-avatar">{{ (user.full_name or user.username or 'U')[:1]|upper }}</div>
+          <div>
+            <div class="profile-name">{{ user.full_name or 'Пользователь' }}</div>
+            <div class="profile-username">{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</div>
+          </div>
+        </div>
+        <p class="profile-lead">Личный кабинет, история оплаты, ключи и реферальная активность в одном месте.</p>
+        <div class="profile-summary-strip">
+          <div class="hero-kpi"><small>Баланс</small><strong>{{ "%.2f"|format(user.balance) }} ₽</strong></div>
+          <div class="hero-kpi"><small>Подписки</small><strong>{{ keys|length }}</strong></div>
+          <div class="hero-kpi"><small>Платежи</small><strong>{{ payments|length }}</strong></div>
+          <div class="hero-kpi"><small>Рефералы</small><strong>{{ referrals_count }}</strong></div>
+        </div>
+        <div class="hero-actions">
+          <a href="/cabinet/referrals" class="btn-outline"><i class="bi bi-people"></i> Рефералы</a>
+          <a href="/cabinet/language" class="btn-outline"><i class="bi bi-translate"></i> Язык</a>
+          <a href="/cabinet/balance" class="btn-accent"><i class="bi bi-wallet2"></i> Баланс</a>
+        </div>
+      </div>
+
+      <aside class="profile-side-card">
+        <div class="hero-focus-label">Состояние аккаунта</div>
+        <div class="hero-focus-rows">
+          <div class="hero-focus-row">
+            <span>Статус</span>
+            <strong>{% if user.is_banned %}Заблокирован{% else %}Активен{% endif %}</strong>
+          </div>
+          <div class="hero-focus-row">
+            <span>Активность</span>
+            <strong>{% if user.last_seen %}{{ user.last_seen.strftime('%d.%m.%Y') }}{% else %}Сегодня{% endif %}</strong>
+          </div>
+          <div class="hero-focus-row">
+            <span>Telegram</span>
+            <strong>{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</strong>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="quick-action-grid">
+    <a href="/cabinet/keys" class="quick-action-card">
+      <span class="stat-icon"><i class="bi bi-key"></i></span>
       <div>
-        <div class="profile-name">{{ user.full_name or 'Пользователь' }}</div>
-        <div class="profile-username">{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</div>
+        <div class="quick-action-label">Мои ключи</div>
+        <div class="quick-action-text">Управление доступами и копирование ссылок</div>
       </div>
-    </div>
-
-    <div class="info-grid">
-      <div class="info-item">
-        <span class="info-label">Баланс</span>
-        <span class="info-value">{{ "%.2f"|format(user.balance) }} ₽</span>
+    </a>
+    <a href="/cabinet/balance" class="quick-action-card">
+      <span class="stat-icon"><i class="bi bi-wallet2"></i></span>
+      <div>
+        <div class="quick-action-label">Платежи</div>
+        <div class="quick-action-text">Пополнение баланса и история операций</div>
       </div>
-      <div class="info-item">
-        <span class="info-label">Подписки</span>
-        <span class="info-value">{{ keys|length }}</span>
+    </a>
+    <a href="/cabinet/referrals" class="quick-action-card">
+      <span class="stat-icon"><i class="bi bi-people"></i></span>
+      <div>
+        <div class="quick-action-label">Рефералы</div>
+        <div class="quick-action-text">Код, приглашения и статистика переходов</div>
       </div>
-      <div class="info-item">
-        <span class="info-label">Платежи</span>
-        <span class="info-value">{{ payments|length }}</span>
+    </a>
+    <a href="/cabinet/support" class="quick-action-card">
+      <span class="stat-icon"><i class="bi bi-chat-left-dots"></i></span>
+      <div>
+        <div class="quick-action-label">Поддержка</div>
+        <div class="quick-action-text">Создать обращение и посмотреть ответы</div>
       </div>
-      <div class="info-item">
-        <span class="info-label">Рефералы</span>
-        <span class="info-value">{{ referrals_count }}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Статус</span>
-        <span class="info-value">{% if user.is_banned %}Заблокирован{% else %}Активен{% endif %}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Активность</span>
-        <span class="info-value">{% if user.last_seen %}{{ user.last_seen.strftime('%d.%m.%Y') }}{% else %}Сегодня{% endif %}</span>
-      </div>
-    </div>
-
-    <div class="hero-actions">
-      <a href="/cabinet/referrals" class="btn-outline"><i class="bi bi-people"></i> Рефералы</a>
-      <a href="/cabinet/language" class="btn-outline"><i class="bi bi-translate"></i> Язык</a>
-      <a href="/cabinet/balance" class="btn-accent"><i class="bi bi-wallet2"></i> Баланс</a>
-    </div>
+    </a>
   </section>
 
   <section class="section-panel">
