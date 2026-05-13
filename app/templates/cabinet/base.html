@@ -32,7 +32,6 @@
         <span class="dash-logo-mark"><i class="bi bi-shield-check"></i></span>
         <span class="dash-logo-text">
           <strong>{{ app_name }}</strong>
-          <small>Telegram cabinet</small>
         </span>
       </a>
 
@@ -69,13 +68,11 @@
           <span class="dash-user-avatar">{{ (user.full_name or user.username or 'U')[:1]|upper }}</span>
           <span class="dash-user-meta">
             <strong>{{ user.full_name or 'Пользователь' }}</strong>
-            <small>{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</small>
           </span>
         </div>
         {% endif %}
         <a href="/cabinet/logout" class="dash-logout" aria-label="Выйти">
           <i class="bi bi-box-arrow-right"></i>
-          <span>Выйти</span>
         </a>
       </div>
       {% endif %}
@@ -112,7 +109,8 @@ window.CABINET_BOOT = {
   currentPath: {{ current_path|tojson }},
   isMiniApp: {{ is_mini_app|tojson }},
   isAuthenticated: {{ ((user is defined) and (user is not none))|tojson }},
-  initDataParam: "tg_init_data"
+  initDataParam: "tg_init_data",
+  miniAppParam: "miniapp"
 };
 
 function getTelegramWebApp() {
@@ -136,15 +134,19 @@ function getMiniAppInitData() {
 function cabinetUrl(path) {
   var initData = getMiniAppInitData();
   var target = new URL(path, window.location.origin);
-  if (initData && target.origin === window.location.origin && target.pathname.startsWith('/cabinet')) {
-    target.searchParams.set(window.CABINET_BOOT.initDataParam, initData);
+  if (target.origin === window.location.origin && target.pathname.startsWith('/cabinet')) {
+    if (window.CABINET_BOOT.isMiniApp || initData) {
+      target.searchParams.set(window.CABINET_BOOT.miniAppParam, '1');
+    }
+    if (initData) {
+      target.searchParams.set(window.CABINET_BOOT.initDataParam, initData);
+    }
   }
   return target.pathname + target.search + target.hash;
 }
 
 function decorateCabinetLinks() {
   var initData = getMiniAppInitData();
-  if (!initData) return;
   document.querySelectorAll('a[href]').forEach(function(link) {
     var href = link.getAttribute('href');
     if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
@@ -155,7 +157,12 @@ function decorateCabinetLinks() {
       return;
     }
     if (target.origin !== window.location.origin || !target.pathname.startsWith('/cabinet')) return;
-    target.searchParams.set(window.CABINET_BOOT.initDataParam, initData);
+    if (window.CABINET_BOOT.isMiniApp || initData) {
+      target.searchParams.set(window.CABINET_BOOT.miniAppParam, '1');
+    }
+    if (initData) {
+      target.searchParams.set(window.CABINET_BOOT.initDataParam, initData);
+    }
     link.setAttribute('href', target.pathname + target.search + target.hash);
   });
 }

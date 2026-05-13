@@ -23,6 +23,7 @@ from .auth import (
     _is_secure_request,
     get_cabinet_user,
     get_telegram_init_data,
+    is_telegram_miniapp_request,
     set_session_cookie,
     try_miniapp_auth,
 )
@@ -52,7 +53,7 @@ async def _require_active_user(request: Request, db: AsyncSession):
 
 
 def _is_mini_app(request: Request) -> bool:
-    return bool(get_telegram_init_data(request))
+    return is_telegram_miniapp_request(request)
 
 
 def _persist_cabinet_session(request: Request, response, user) -> None:

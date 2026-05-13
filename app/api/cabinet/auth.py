@@ -22,6 +22,7 @@ COOKIE_NAME = "cabinet_session"
 CABINET_COOKIE_MAX_AGE = 86400 * 30
 INT64_MAX = 2**63 - 1
 MINIAPP_INIT_DATA_PARAM = "tg_init_data"
+MINIAPP_MODE_PARAM = "miniapp"
 
 
 def _is_secure_request(request: Request) -> bool:
@@ -36,6 +37,14 @@ def get_telegram_init_data(request: Request) -> str:
         request.headers.get("X-Telegram-Init-Data", "")
         or request.query_params.get(MINIAPP_INIT_DATA_PARAM, "")
         or request.query_params.get("initData", "")
+    )
+
+
+def is_telegram_miniapp_request(request: Request) -> bool:
+    miniapp_flag = request.query_params.get(MINIAPP_MODE_PARAM, "").strip().lower()
+    return bool(
+        get_telegram_init_data(request)
+        or miniapp_flag in {"1", "true", "yes", "on"}
     )
 
 

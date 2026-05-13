@@ -9,6 +9,7 @@ from app.api.cabinet.auth import (
     _is_secure_request,
     cabinet_auth,
     get_telegram_init_data,
+    is_telegram_miniapp_request,
     set_session_cookie,
 )
 
@@ -87,6 +88,11 @@ def test_build_telegram_full_name_uses_fallback_name():
 def test_get_telegram_init_data_uses_query_fallback():
     request = _make_request(query_string=b"tg_init_data=test-init-data")
     assert get_telegram_init_data(request) == "test-init-data"
+
+
+def test_is_telegram_miniapp_request_uses_miniapp_flag():
+    request = _make_request(query_string=b"miniapp=1")
+    assert is_telegram_miniapp_request(request) is True
 
 
 async def test_cabinet_auth_oidc_uses_numeric_telegram_id(session):

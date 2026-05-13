@@ -1,6 +1,7 @@
 """Утилита для получения главного меню с настройками из БД."""
 
 import json
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from aiogram.types import InlineKeyboardMarkup
 from app.bot.keyboards.main import main_menu_kb, _DEFAULT_LAYOUT
 from app.services.bot_settings import BotSettingsService
@@ -91,6 +92,13 @@ def _resolve_url(settings: dict, key: str, fallback_path: str) -> str:
     return ""
 
 
+def _append_query_param(url: str, key: str, value: str) -> str:
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query[key] = value
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
 def _translate_layout(layout: list, lang: str, settings: dict) -> list:
     """Translate button labels in layout based on user language, with admin overrides."""
     result = []
@@ -119,6 +127,7 @@ def _resolve_layout_urls(layout: list, settings: dict, is_admin: bool) -> list:
                 url = _resolve_url(settings, "cabinet_url", "/cabinet/")
                 if not url:
                     continue
+                url = _append_query_param(url, "miniapp", "1")
                 new_row.append({**b, "web_app": url, "url": "", "callback": ""})
             elif bid == "admin_panel":
                 if not is_admin:

@@ -8,29 +8,29 @@
         <div class="login-logo"><i class="bi bi-telegram"></i></div>
         <div>
           <h1 class="login-title">{{ app_name }}</h1>
-          <p class="login-subtitle">Личный кабинет для управления подписками, оплатой и поддержкой без лишних шагов.</p>
+          <p class="login-subtitle">Управляйте подписками, балансом и поддержкой</p>
         </div>
 
         <div class="login-list">
           <div class="login-item">
             <i class="bi bi-lightning-charge text-success"></i>
             <div>
-              <strong>Быстрый вход через Telegram</strong>
-              <div class="muted">Один аккаунт для MiniApp и веб-кабинета.</div>
+              <strong>Вход через Telegram</strong>
+              <div class="muted">Один аккаунт для MiniApp и веб-кабинета</div>
             </div>
           </div>
           <div class="login-item">
             <i class="bi bi-key text-success"></i>
             <div>
-              <strong>Подписки и ключи под рукой</strong>
-              <div class="muted">Копирование, продление и инструкции в одном месте.</div>
+              <strong>Подписки и ключи</strong>
+              <div class="muted">Копирование, продление и инструкции</div>
             </div>
           </div>
           <div class="login-item">
             <i class="bi bi-headset text-success"></i>
             <div>
-              <strong>Нормальная поддержка</strong>
-              <div class="muted">История обращений и ответы без потери контекста.</div>
+              <strong>Поддержка</strong>
+              <div class="muted">История обращений в одном месте</div>
             </div>
           </div>
         </div>
@@ -38,8 +38,8 @@
 
       <section class="login-pane">
         <div>
-          <h2>Вход в кабинет</h2>
-          <p class="login-subtitle">Используйте Telegram, чтобы открыть кабинет в браузере или внутри MiniApp.</p>
+          <h2>Вход</h2>
+          <p class="login-subtitle">Авторизация через Telegram</p>
         </div>
 
         {% if error %}
@@ -48,7 +48,7 @@
 
         <div id="login-status" class="login-loading" style="display:none">
           <i class="bi bi-arrow-repeat spin"></i>
-          <span id="login-status-text">Подключаем Telegram...</span>
+          <span id="login-status-text">Подключение...</span>
         </div>
 
         <div id="miniapp-status" class="miniapp-status-box" style="display:none">
@@ -56,12 +56,12 @@
             <i class="bi bi-phone text-success"></i>
             <div>
               <strong>Режим MiniApp</strong>
-              <div class="muted">Кабинет попытается войти автоматически через Telegram без лишних кнопок и редиректов.</div>
+              <div class="muted">Автоматический вход через Telegram</div>
             </div>
           </div>
           <div class="miniapp-actions">
             <button id="miniapp-retry" type="button" class="btn-accent" style="display:none" onclick="startMiniAppLogin(true)">
-              <i class="bi bi-arrow-clockwise"></i> Повторить вход
+              <i class="bi bi-arrow-clockwise"></i> Повторить
             </button>
             <a href="/cabinet/" id="miniapp-home" class="btn-outline" style="display:none">Открыть кабинет</a>
           </div>
@@ -82,22 +82,22 @@
 
           {% if telegram_client_id %}
           <button id="login-btn" class="btn-accent w-100" onclick="handleLoginClick()" {% if bu %}style="display:none"{% endif %}>
-            <i class="bi bi-person-check"></i> Войти через Telegram
+            <i class="bi bi-person-check"></i> Войти
           </button>
           {% endif %}
 
           {% if not bu and not telegram_client_id %}
           <div class="alert alert-warning">
-            Telegram Login Widget пока не настроен. Откройте кабинет через MiniApp или настройте client_id и bot_username.
+            Вход через Telegram пока не настроен. Откройте кабинет через MiniApp.
           </div>
           {% endif %}
         </div>
 
         <p id="login-hint" class="login-hint">
           {% if is_mini_app %}
-          Если вход не восстановился автоматически, нажмите «Повторить вход».
+          Нажмите «Повторить вход», если не получилось автоматически
           {% else %}
-          Авторизация проходит только через Telegram и безопасно привязывается к вашему Telegram ID.
+          Безопасная авторизация через ваш Telegram ID
           {% endif %}
         </p>
       </section>
@@ -136,13 +136,25 @@ function showMiniAppFailure(message) {
   document.getElementById('miniapp-status').style.display = '';
   document.getElementById('miniapp-retry').style.display = '';
   document.getElementById('miniapp-home').style.display = '';
-  setLoginState(message || 'Не удалось восстановить вход в MiniApp');
+  setLoginState(message || 'Не удалось восстановить вход');
+}
+
+async function waitForMiniAppInitData(timeoutMs) {
+  var startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    var tg = getTelegramWebApp();
+    if (tg && tg.initData) {
+      return true;
+    }
+    await new Promise(function(resolve) { setTimeout(resolve, 120); });
+  }
+  return false;
 }
 
 async function startMiniAppLogin(force) {
   document.getElementById('miniapp-status').style.display = '';
   document.getElementById('miniapp-retry').style.display = 'none';
-  setLoginState('Подключаем Telegram MiniApp...');
+  setLoginState('Подключение Telegram...');
 
   try {
     var result = await syncMiniAppSession({ force: !!force, silent: false });
@@ -153,16 +165,23 @@ async function startMiniAppLogin(force) {
     }
     showMiniAppFailure(result.message || 'Telegram не подтвердил вход');
   } catch (error) {
-    showMiniAppFailure('Ошибка сети во время авторизации');
+    showMiniAppFailure('Ошибка сети');
   }
 }
 
 (function initLoginFlow() {
-  var tg = getTelegramWebApp();
-  if (tg && tg.initData) {
+  if (window.CABINET_BOOT.isMiniApp) {
     document.getElementById('web-login').style.display = 'none';
     document.getElementById('login-hint').style.display = 'none';
-    startMiniAppLogin(true);
+    document.getElementById('miniapp-status').style.display = '';
+    setLoginState('Ожидаем данные Telegram MiniApp...');
+    waitForMiniAppInitData(3500).then(function(isReady) {
+      if (isReady) {
+        startMiniAppLogin(true);
+        return;
+      }
+      showMiniAppFailure('MiniApp открыт без initData. Откройте кабинет кнопкой из бота ещё раз.');
+    });
     return;
   }
 
@@ -179,7 +198,7 @@ setTimeout(function detectWidgetFailure() {
 }, 1800);
 
 function onTelegramAuth(user) {
-  setLoginState('Проверяем Telegram-профиль...');
+  setLoginState('Проверка профиля...');
   var widget = document.getElementById('telegram-login');
   var button = document.getElementById('login-btn');
   if (widget) widget.style.display = 'none';
@@ -238,7 +257,7 @@ function onOidcCallback(data) {
   }
   if (!data.id_token) return;
 
-  setLoginState('Подтверждаем вход через Telegram...');
+  setLoginState('Подтверждение входа...');
   document.getElementById('login-btn').style.display = 'none';
   document.getElementById('login-hint').style.display = 'none';
 
