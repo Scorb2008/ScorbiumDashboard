@@ -142,8 +142,7 @@ function showMiniAppFailure(message) {
 async function waitForMiniAppInitData(timeoutMs) {
   var startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    var tg = getTelegramWebApp();
-    if (tg && tg.initData) {
+    if (getMiniAppInitData()) {
       return true;
     }
     await new Promise(function(resolve) { setTimeout(resolve, 120); });
@@ -175,12 +174,12 @@ async function startMiniAppLogin(force) {
     document.getElementById('login-hint').style.display = 'none';
     document.getElementById('miniapp-status').style.display = '';
     setLoginState('Ожидаем данные Telegram MiniApp...');
-    waitForMiniAppInitData(3500).then(function(isReady) {
+    waitForMiniAppInitData(9000).then(function(isReady) {
       if (isReady) {
         startMiniAppLogin(true);
         return;
       }
-      showMiniAppFailure('MiniApp открыт без initData. Откройте кабинет кнопкой из бота ещё раз.');
+      showMiniAppFailure('MiniApp не передал данные входа. Откройте кабинет кнопкой WebApp из бота.');
     });
     return;
   }

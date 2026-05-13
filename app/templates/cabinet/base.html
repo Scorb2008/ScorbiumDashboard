@@ -113,6 +113,26 @@ window.CABINET_BOOT = {
   initDataParam: "tg_init_data",
   miniAppParam: "miniapp"
 };
+window.CABINET_STORAGE = {
+  miniAppInitData: 'cabinetMiniAppInitData',
+  miniAppSyncedAt: 'cabinetMiniAppSyncedAt',
+  miniAppReady: 'cabinetMiniAppReady'
+};
+
+function cabinetStorageGet(key) {
+  try {
+    return sessionStorage.getItem(key) || localStorage.getItem(key) || '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function cabinetStorageSet(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+    localStorage.setItem(key, value);
+  } catch (error) {}
+}
 
 function getTelegramWebApp() {
   try {
@@ -122,14 +142,22 @@ function getTelegramWebApp() {
   }
 }
 
+function persistMiniAppInitData(value) {
+  if (!value) return '';
+  cabinetStorageSet(window.CABINET_STORAGE.miniAppInitData, value);
+  return value;
+}
+
 function getMiniAppInitData() {
   var tg = getTelegramWebApp();
-  if (tg && tg.initData) return tg.initData;
+  if (tg && tg.initData) return persistMiniAppInitData(tg.initData);
   try {
-    return new URL(window.location.href).searchParams.get(window.CABINET_BOOT.initDataParam) || "";
+    var queryValue = new URL(window.location.href).searchParams.get(window.CABINET_BOOT.initDataParam) || "";
+    if (queryValue) return persistMiniAppInitData(queryValue);
   } catch (error) {
-    return "";
+    return cabinetStorageGet(window.CABINET_STORAGE.miniAppInitData);
   }
+  return cabinetStorageGet(window.CABINET_STORAGE.miniAppInitData);
 }
 
 function cabinetUrl(path) {
@@ -224,7 +252,7 @@ async function syncMiniAppSession(options) {
     return { ok: false, skipped: true };
   }
 
-  var lastSyncedAt = Number(sessionStorage.getItem('cabinetMiniAppSyncedAt') || 0);
+  var lastSyncedAt = Number(cabinetStorageGet(window.CABINET_STORAGE.miniAppSyncedAt) || 0);
   if (!opts.force && Date.now() - lastSyncedAt < 15000) {
     return { ok: true, skipped: true };
   }
@@ -240,8 +268,8 @@ async function syncMiniAppSession(options) {
     });
 
     if (result.data && result.data.ok) {
-      sessionStorage.setItem('cabinetMiniAppSyncedAt', String(Date.now()));
-      sessionStorage.setItem('cabinetMiniAppReady', '1');
+      cabinetStorageSet(window.CABINET_STORAGE.miniAppSyncedAt, String(Date.now()));
+      cabinetStorageSet(window.CABINET_STORAGE.miniAppReady, '1');
     } else if (!opts.silent) {
       showToast((result.data && result.data.message) || 'Не удалось восстановить сессию', 'error');
     }
@@ -298,9 +326,23 @@ function openExternal(url) {
   window.open(url, '_blank', 'noopener');
 }
 
+async function warmMiniAppContext(timeoutMs) {
+  var startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    var initData = getMiniAppInitData();
+    if (initData) {
+      persistMiniAppInitData(initData);
+      decorateCabinetLinks();
+      return true;
+    }
+    await new Promise(function(resolve) { setTimeout(resolve, 160); });
+  }
+  return false;
+}
+
 (function bootstrapCabinet() {
   var tg = getTelegramWebApp();
-  if (tg && tg.initData) {
+  if (tg) {
     document.body.classList.remove('web-mode');
     document.body.classList.add('mini-mode');
     try {
@@ -312,6 +354,7 @@ function openExternal(url) {
 
   cleanMiniAppParamFromAddress();
   decorateCabinetLinks();
+  warmMiniAppContext(9000).catch(function() {});
 
   if (window.CABINET_BOOT.isAuthenticated && getMiniAppInitData()) {
     syncMiniAppSession({ silent: true }).catch(function() {});

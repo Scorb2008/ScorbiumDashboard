@@ -2,7 +2,7 @@
 {% block title %}Главная - {{ app_name }}{% endblock %}
 {% block content %}
 <div class="dash-stack">
-  <section class="hero-panel">
+  <section class="hero-panel hero-panel-compact">
     <div class="hero-grid">
       <div class="hero-copy">
         <div class="eyebrow">
@@ -12,6 +12,12 @@
         <div class="dash-header">
           <h1>{{ user.full_name or ('ID ' ~ user.id) }}</h1>
         </div>
+        <p class="hero-lead">Подписки, баланс и поддержка в одном спокойном рабочем пространстве.</p>
+        <div class="hero-kpis">
+          <span class="hero-kpi"><small>Баланс</small><strong>{{ "%.2f"|format(user.balance) }} ₽</strong></span>
+          <span class="hero-kpi"><small>Подписки</small><strong>{{ keys|length }}</strong></span>
+          <span class="hero-kpi"><small>Рефкод</small><strong>{{ user.referral_code or '—' }}</strong></span>
+        </div>
         <div class="hero-actions">
           <a href="/cabinet/plans" class="btn-accent"><i class="bi bi-stars"></i> Тарифы</a>
           <a href="/cabinet/keys" class="btn-outline"><i class="bi bi-key"></i> Подписки</a>
@@ -19,45 +25,56 @@
         </div>
       </div>
 
-      <div class="hero-aside">
-        <div class="summary-card">
-          <small>Баланс</small>
-          <strong>{{ "%.2f"|format(user.balance) }} ₽</strong>
+      <aside class="hero-focus-card">
+        <div class="hero-focus-label">Быстрый доступ</div>
+        <div class="hero-focus-rows">
+          <div class="hero-focus-row">
+            <span>Баланс</span>
+            <strong>{{ "%.2f"|format(user.balance) }} ₽</strong>
+          </div>
+          <div class="hero-focus-row">
+            <span>Активные ключи</span>
+            <strong>{{ keys|length }}</strong>
+          </div>
+          <div class="hero-focus-row">
+            <span>Поддержка</span>
+            <strong>онлайн</strong>
+          </div>
         </div>
-        <div class="summary-card">
-          <small>Подписки</small>
-          <strong>{{ keys|length }}</strong>
-        </div>
-        <div class="summary-card">
-          <small>Реферальный код</small>
-          <strong>{{ user.referral_code or '—' }}</strong>
-        </div>
-      </div>
+        <a href="/cabinet/balance" class="btn-accent w-100"><i class="bi bi-wallet2"></i> Пополнить баланс</a>
+      </aside>
     </div>
   </section>
 
-  <section class="stats-row">
-    <article class="stat-card">
-      <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
+  <section class="quick-action-grid">
+    <a href="/cabinet/keys" class="quick-action-card">
+      <span class="stat-icon"><i class="bi bi-key"></i></span>
       <div>
-        <div class="stat-value">{{ "%.2f"|format(user.balance) }} ₽</div>
-        <div class="stat-label">Баланс</div>
+        <div class="quick-action-label">Подписки</div>
+        <div class="quick-action-text">Ссылки, трафик и срок действия</div>
       </div>
-    </article>
-    <article class="stat-card">
-      <div class="stat-icon"><i class="bi bi-key"></i></div>
+    </a>
+    <a href="/cabinet/support" class="quick-action-card">
+      <span class="stat-icon"><i class="bi bi-chat-left-dots"></i></span>
       <div>
-        <div class="stat-value">{{ keys|length }}</div>
-        <div class="stat-label">Активных подписок</div>
+        <div class="quick-action-label">Поддержка</div>
+        <div class="quick-action-text">Создать обращение и посмотреть ответы</div>
       </div>
-    </article>
-    <article class="stat-card">
-      <div class="stat-icon"><i class="bi bi-gift"></i></div>
+    </a>
+    <a href="/cabinet/profile" class="quick-action-card">
+      <span class="stat-icon"><i class="bi bi-person-circle"></i></span>
       <div>
-        <div class="stat-value">{{ user.referral_code or '—' }}</div>
-        <div class="stat-label">Реферальный код</div>
+        <div class="quick-action-label">Профиль</div>
+        <div class="quick-action-text">Реферальные данные и активность</div>
       </div>
-    </article>
+    </a>
+    <a href="/cabinet/guides" class="quick-action-card">
+      <span class="stat-icon"><i class="bi bi-phone"></i></span>
+      <div>
+        <div class="quick-action-label">Инструкции</div>
+        <div class="quick-action-text">Быстрое подключение на ваши устройства</div>
+      </div>
+    </a>
   </section>
 
   {% if keys %}
@@ -113,7 +130,7 @@
 
   <section class="section-panel">
     <div class="section-header">
-      <h2>Тарифы</h2>
+      <h2>Актуальные тарифы</h2>
       <a href="/cabinet/plans" class="btn-outline">Все</a>
     </div>
 

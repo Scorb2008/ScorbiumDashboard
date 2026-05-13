@@ -2,11 +2,14 @@
 {% block title %}Тарифы - {{ app_name }}{% endblock %}
 {% block content %}
 <div class="dash-stack">
-  <div class="section-header">
-    <h2>Выберите тариф</h2>
-    <div class="summary-card" style="padding:10px 14px;border-radius:14px;">
-      <strong style="display:inline;font-size:1rem;">{{ "%.2f"|format(user.balance) }} ₽</strong>
-      <small class="text-muted">на балансе</small>
+  <div class="section-header plans-toolbar">
+    <div>
+      <div class="eyebrow"><i class="bi bi-stars"></i><span>Тарифы</span></div>
+      <h2>Выберите подписку</h2>
+    </div>
+    <div class="balance-chip">
+      <small>Баланс</small>
+      <strong>{{ "%.2f"|format(user.balance) }} ₽</strong>
     </div>
   </div>
 
@@ -44,8 +47,8 @@
   <div class="info-card">
     <i class="bi bi-info-circle text-success"></i>
     <div>
-      <strong>Пополнить баланс</strong>
-      <div class="muted">Перейдите в раздел <a href="/cabinet/balance">«Баланс»</a></div>
+      <strong>Нужно пополнение?</strong>
+      <div class="muted">Откройте раздел <a href="/cabinet/balance">«Баланс»</a> и выберите способ оплаты.</div>
     </div>
   </div>
 </div>
