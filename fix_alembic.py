@@ -76,12 +76,17 @@ async def main():
     has_autorenew = await _column_exists(conn, 'users', 'autorenew')
     has_payment_type = await _column_exists(conn, 'payments', 'payment_type')
     has_admins = await _table_exists(conn, 'admins')
+    has_vpn_traffic = (
+        await _column_exists(conn, 'vpn_keys', 'download')
+        and await _column_exists(conn, 'vpn_keys', 'upload')
+    )
 
     print(f"3. Schema state:")
     print(f"   - users.language   : {has_language}")
     print(f"   - users.autorenew  : {has_autorenew}")
     print(f"   - payments.payment_type: {has_payment_type}")
     print(f"   - admins table     : {has_admins}")
+    print(f"   - vpn_keys traffic : {has_vpn_traffic}")
 
     # 3. Determine target version
     has_any_tables = await _table_exists(conn, 'users') or await _table_exists(conn, 'plans')
@@ -91,7 +96,9 @@ async def main():
         print("   Skipping alembic_version stamp.")
     else:
         target = '4d5f8377eff0'  # initial
-        if has_admins:
+        if has_vpn_traffic:
+            target = 'b2c3d4e5f6a7'
+        elif has_admins:
             target = 'd5e6f7a8b9c0'
         elif has_payment_type:
             target = 'c4d5e6f7a8b9'

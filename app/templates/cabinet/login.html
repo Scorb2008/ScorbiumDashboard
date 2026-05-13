@@ -21,11 +21,13 @@
         data-onauth="onTelegramAuth(user)"
         data-request-access="write"></script>
     </div>
-    {% elif telegram_client_id %}
-    <button id="login-btn" class="btn-accent w-100" onclick="handleLoginClick()">
+    {% endif %}
+    {% if telegram_client_id %}
+    <button id="login-btn" class="btn-accent w-100" onclick="handleLoginClick()" {% if bu %}style="display:none"{% endif %}>
       <i class="bi bi-telegram"></i> Войти через Telegram
     </button>
-    {% else %}
+    {% endif %}
+    {% if not bu and not telegram_client_id %}
     <div class="alert alert-warning">
       Виджет входа недоступен — bot_username не настроен. Попробуйте позже или войдите через Mini App.
     </div>
@@ -71,6 +73,15 @@
 
   showFallbackLogin();
 })();
+
+setTimeout(function detectWidgetFailure() {
+  var hasWidgetContainer = !!document.getElementById('telegram-login');
+  var hasIframe = document.querySelector('#telegram-login iframe');
+  var btn = document.getElementById('login-btn');
+  if (hasWidgetContainer && !hasIframe && btn) {
+    btn.style.display = '';
+  }
+}, 1800);
 
 function showFallbackLogin() {
   document.getElementById('login-status').style.display = 'none';
