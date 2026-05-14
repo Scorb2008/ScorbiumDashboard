@@ -1,8 +1,6 @@
 import hashlib
 import hmac
 import ipaddress
-import json
-from typing import Optional
 
 from app.utils.log import log
 
@@ -40,35 +38,16 @@ async def verify_ip_in_list(client_ip: str, allowed_ips: set) -> bool:
         return False
 
 
-def compute_cryptobot_hmac(token: str, body: dict) -> str:
-    """Compute HMAC for CryptoBot webhook per their docs.
-
-    CryptoBot signs the request body with HMAC-SHA256 using the API token as key.
-    The signature is passed in the X-Crypto-Pay-API-Signature header.
-    """
-    sorted_keys = sorted(body.keys())
-    parts = []
-    for k in sorted_keys:
-        v = body[k]
-        if isinstance(v, dict):
-            v = json.dumps(v, separators=(",", ":"))
-        elif v is None:
-            v = ""
-        else:
-            v = str(v)
-        parts.append(v)
-    data_string = ":".join(parts)
-    return hmac.new(
-        token.encode(),
-        data_string.encode(),
-        hashlib.sha256,
-    ).hexdigest()
+def compute_cryptobot_hmac(token: str, raw_body: bytes) -> str:
+    """Compute CryptoBot webhook HMAC over the raw JSON body."""
+    secret = hashlib.sha256(token.encode()).digest()
+    return hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
 
 
-def verify_cryptobot_signature(body: dict, header_sig: str, token: str) -> bool:
+def verify_cryptobot_signature(raw_body: bytes, header_sig: str, token: str) -> bool:
     """Verify CryptoBot webhook signature."""
     try:
-        expected = compute_cryptobot_hmac(token, body)
+        expected = compute_cryptobot_hmac(token, raw_body)
         return hmac.compare_digest(expected, header_sig)
     except Exception as e:
         log.error(f"CryptoBot signature verification error: {e}")

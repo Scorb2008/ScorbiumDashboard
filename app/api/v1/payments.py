@@ -203,8 +203,6 @@ async def freekassa_webhook(request: Request, db: AsyncSession = Depends(get_db)
         return "YES"
 
     from app.services.plan import PlanService
-    from app.services.vpn_key import VpnKeyService
-    from app.services.user import UserService
     from app.services.telegram_notify import TelegramNotifyService
 
     payment, key, just_confirmed, just_processed = await _finalize_subscription_payment(
@@ -249,7 +247,6 @@ async def freekassa_webhook(request: Request, db: AsyncSession = Depends(get_db)
 @router.post("/webhook/yookassa", summary="Yookassa webhook", include_in_schema=False)
 async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     """Atomic Yookassa webhook: verify signature, confirm payment + provision."""
-    import asyncio
     import json
 
     try:
@@ -370,7 +367,10 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
 async def cryptobot_webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     """Handle CryptoBot invoice paid webhook with signature verification."""
     try:
-        data = await request.json()
+        raw_body = await request.body()
+        import json
+
+        data = json.loads(raw_body)
     except Exception as e:
         log.error(f"CryptoBot webhook: invalid JSON: {e}")
         return {"ok": False}
@@ -385,7 +385,7 @@ async def cryptobot_webhook(request: Request, db: AsyncSession = Depends(get_db)
     if not sig_header:
         log.warning("CryptoBot webhook: missing signature header")
         return {"ok": False}
-    if not verify_cryptobot_signature(data, sig_header, cb_token):
+    if not verify_cryptobot_signature(raw_body, sig_header, cb_token):
         log.warning("CryptoBot webhook: invalid signature")
         return {"ok": False}
 
@@ -398,7 +398,6 @@ async def cryptobot_webhook(request: Request, db: AsyncSession = Depends(get_db)
 
     payload_raw = invoice.get("payload", "")
     try:
-        from app.services.vpn_key import VpnKeyService
         from app.services.telegram_notify import TelegramNotifyService
 
         if payload_raw.startswith("topup_crypto:"):
