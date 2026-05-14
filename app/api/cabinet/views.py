@@ -181,6 +181,112 @@ async def _finalize_subscription_payment(db: AsyncSession, payment, external_id:
     return payment, delivery.key, None
 
 
+async def _create_cabinet_yookassa_payment(
+    request: Request,
+    db: AsyncSession,
+    *,
+    user,
+    plan,
+    promo_code: str,
+    provider: PaymentProvider,
+    payment_method: str | None,
+    success_message: str,
+):
+    promo = None
+    if promo_code.strip():
+        promo, promo_error = await _resolve_discount_promo(
+            db,
+            user_id=user.id,
+            plan_id=plan.id,
+            promo_code=promo_code,
+        )
+        if promo_error:
+            return JSONResponse({"ok": False, "message": promo_error}, status_code=400)
+
+    charged_amount, discount_amount = _apply_discount(plan.price, promo)
+
+    try:
+        payment_provider = (
+            PaymentProvider.BALANCE if charged_amount == Decimal("0.00") else provider
+        )
+        payment_meta = {
+            "plan_id": plan.id,
+            "kind": "cabinet_plan_purchase",
+            "original_amount": str(_normalize_money(plan.price)),
+            "final_amount": str(charged_amount),
+        }
+        if promo:
+            payment_meta["promo_code"] = promo.code
+            payment_meta["discount_value"] = str(promo.value)
+            payment_meta["discount_amount"] = str(discount_amount)
+
+        payment = await PaymentService(db).create_pending(
+            user.id,
+            plan,
+            payment_provider,
+            amount=charged_amount,
+            meta=json.dumps(payment_meta),
+        )
+
+        if promo:
+            consumed = await PromoService(db).consume(promo, user.id)
+            if not consumed:
+                await db.rollback()
+                return JSONResponse({"ok": False, "message": "Промокод уже использован"}, status_code=400)
+
+        if charged_amount == Decimal("0.00"):
+            confirmed = await PaymentService(db).confirm_once(payment.id, f"promo_free_{payment.id}")
+            if not confirmed.payment:
+                await db.rollback()
+                return JSONResponse({"ok": False, "message": "Ошибка при оформлении"}, status_code=500)
+            _, key, payment_error = await _finalize_subscription_payment(
+                db, payment, f"promo_free_{payment.id}"
+            )
+            if payment_error or not key:
+                await db.rollback()
+                return JSONResponse({"ok": False, "message": "Ошибка при создании ключа"}, status_code=500)
+            await db.commit()
+            return JSONResponse({
+                "ok": True,
+                "status": "succeeded",
+                "message": "Промокод полностью покрыл стоимость тарифа",
+                "access_url": key.access_url,
+                "redirect": "/cabinet/keys",
+            })
+
+        yk = await YookassaService.create()
+        return_url = _absolute_cabinet_url(request, "/cabinet/plans", payment_id=payment.id)
+        if payment_method == "sbp":
+            yk_payment = await yk.create_sbp_payment(
+                amount=charged_amount,
+                description=f"VPN подписка — {plan.name}",
+                return_url=return_url,
+                metadata={"payment_id": str(payment.id), "plan_id": str(plan.id)},
+            )
+        else:
+            yk_payment = await yk.create_payment(
+                amount=charged_amount,
+                description=f"VPN подписка — {plan.name}",
+                return_url=return_url,
+                metadata={"payment_id": str(payment.id), "plan_id": str(plan.id)},
+            )
+        payment.external_id = yk_payment.id
+        await db.commit()
+
+        return JSONResponse({
+            "ok": True,
+            "status": "pending",
+            "message": success_message,
+            "payment_id": payment.id,
+            "payment_url": yk_payment.confirmation.confirmation_url,
+            "return_url": return_url,
+        })
+    except Exception as e:
+        log.error("Cabinet Yookassa payment error (%s): %s", provider.value, e)
+        await db.rollback()
+        return JSONResponse({"ok": False, "message": "Не удалось создать платёж"}, status_code=502)
+
+
 async def _ensure_bot_username(db: AsyncSession, settings: dict) -> str:
     bu = settings.get("bot_username", "")
     if bu:
@@ -690,91 +796,47 @@ async def cabinet_pay_yookassa(
     if not plan or not plan.is_active:
         return JSONResponse({"ok": False, "message": "Тариф не найден"}, status_code=404)
 
-    promo = None
-    if promo_code.strip():
-        promo, promo_error = await _resolve_discount_promo(
-            db,
-            user_id=user.id,
-            plan_id=plan.id,
-            promo_code=promo_code,
-        )
-        if promo_error:
-            return JSONResponse({"ok": False, "message": promo_error}, status_code=400)
+    return await _create_cabinet_yookassa_payment(
+        request,
+        db,
+        user=user,
+        plan=plan,
+        promo_code=promo_code,
+        provider=PaymentProvider.YOOKASSA,
+        payment_method=None,
+        success_message="Ссылка на оплату картой создана",
+    )
 
-    charged_amount, discount_amount = _apply_discount(plan.price, promo)
 
-    try:
-        payment_provider = (
-            PaymentProvider.BALANCE if charged_amount == Decimal("0.00") else PaymentProvider.YOOKASSA
-        )
-        payment_meta = {
-            "plan_id": plan.id,
-            "kind": "cabinet_plan_purchase",
-            "original_amount": str(_normalize_money(plan.price)),
-            "final_amount": str(charged_amount),
-        }
-        if promo:
-            payment_meta["promo_code"] = promo.code
-            payment_meta["discount_value"] = str(promo.value)
-            payment_meta["discount_amount"] = str(discount_amount)
+@router.post("/cabinet/pay/yookassa-sbp")
+async def cabinet_pay_yookassa_sbp(
+    request: Request,
+    plan_id: int = Form(0),
+    promo_code: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await _require_active_user(request, db)
+    if not user:
+        return JSONResponse({"ok": False, "message": "Not authenticated"}, status_code=401)
 
-        payment = await PaymentService(db).create_pending(
-            user.id,
-            plan,
-            payment_provider,
-            amount=charged_amount,
-            meta=json.dumps(payment_meta),
-        )
+    settings = await BotSettingsService(db).get_all()
+    if settings.get("ps_sbp_enabled", "0") != "1":
+        return JSONResponse({"ok": False, "message": "Оплата через СБП сейчас недоступна"}, status_code=400)
 
-        if promo:
-            consumed = await PromoService(db).consume(promo, user.id)
-            if not consumed:
-                await db.rollback()
-                return JSONResponse({"ok": False, "message": "Промокод уже использован"}, status_code=400)
+    plan = await PlanService(db).get_by_id(plan_id)
+    if not plan or not plan.is_active:
+        return JSONResponse({"ok": False, "message": "Тариф не найден"}, status_code=404)
 
-        if charged_amount == Decimal("0.00"):
-            confirmed = await PaymentService(db).confirm_once(payment.id, f"promo_free_{payment.id}")
-            if not confirmed.payment:
-                await db.rollback()
-                return JSONResponse({"ok": False, "message": "Ошибка при оформлении"}, status_code=500)
-            _, key, payment_error = await _finalize_subscription_payment(
-                db, payment, f"promo_free_{payment.id}"
-            )
-            if payment_error or not key:
-                await db.rollback()
-                return JSONResponse({"ok": False, "message": "Ошибка при создании ключа"}, status_code=500)
-            await db.commit()
-            return JSONResponse({
-                "ok": True,
-                "status": "succeeded",
-                "message": "Промокод полностью покрыл стоимость тарифа",
-                "access_url": key.access_url,
-                "redirect": "/cabinet/keys",
-            })
-
-        yk = await YookassaService.create()
-        return_url = _absolute_cabinet_url(request, "/cabinet/plans", payment_id=payment.id)
-        yk_payment = await yk.create_payment(
-            amount=charged_amount,
-            description=f"VPN подписка — {plan.name}",
-            return_url=return_url,
-            metadata={"payment_id": str(payment.id), "plan_id": str(plan.id)},
-        )
-        payment.external_id = yk_payment.id
-        await db.commit()
-
-        return JSONResponse({
-            "ok": True,
-            "status": "pending",
-            "message": "Ссылка на оплату создана",
-            "payment_id": payment.id,
-            "payment_url": yk_payment.confirmation.confirmation_url,
-            "return_url": return_url,
-        })
-    except Exception as e:
-        log.error("Yookassa cabinet payment error: %s", e)
-        await db.rollback()
-        return JSONResponse({"ok": False, "message": "Не удалось создать платёж"}, status_code=502)
+    return await _create_cabinet_yookassa_payment(
+        request,
+        db,
+        user=user,
+        plan=plan,
+        promo_code=promo_code,
+        provider=PaymentProvider.YOOKASSA_SBP,
+        payment_method="sbp",
+        success_message="Ссылка на оплату через СБП создана",
+    )
 
 
 @router.post("/cabinet/topup/yookassa")

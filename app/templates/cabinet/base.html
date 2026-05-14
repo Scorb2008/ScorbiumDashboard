@@ -237,6 +237,24 @@ function openExternal(url) {
   window.location.href = target;
 }
 
+document.addEventListener('click', function(event) {
+  var copyTrigger = event.target.closest('[data-copy-url]');
+  if (copyTrigger) {
+    event.preventDefault();
+    copyText(
+      copyTrigger.getAttribute('data-copy-url') || '',
+      copyTrigger.getAttribute('data-copy-success') || 'Скопировано'
+    );
+    return;
+  }
+
+  var openTrigger = event.target.closest('[data-open-url]');
+  if (openTrigger) {
+    event.preventDefault();
+    openExternal(openTrigger.getAttribute('data-open-url') || '');
+  }
+});
+
 (function() {
   var tg = getTelegramWebApp();
   if (tg && tg.initData) {

@@ -884,8 +884,8 @@
 
             <div class="cab-home-sub-actions">
               {% if key.access_url and key.access_url != 'pending' %}
-              <button class="btn btn-o" onclick="copyText({{ key.access_url|tojson }}, 'Ссылка скопирована')"><i class="bi bi-copy"></i> Копировать</button>
-              <button class="btn btn-p" onclick="openExternal({{ key.access_url|tojson }})"><i class="bi bi-box-arrow-up-right"></i> Открыть</button>
+              <button class="btn btn-o" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована"><i class="bi bi-copy"></i> Копировать</button>
+              <button class="btn btn-p" type="button" data-open-url="{{ key.access_url }}"><i class="bi bi-box-arrow-up-right"></i> Открыть</button>
               {% else %}
               <div class="ib" style="width:100%"><i class="bi bi-hourglass-split cg"></i><div><strong>Подготовка</strong><span class="muted">Ключ появится автоматически</span></div></div>
               {% endif %}
@@ -919,7 +919,7 @@
             <div class="cab-home-plan-price">{{ "%.0f"|format(plan.price) }} ₽</div>
             <p class="cab-home-plan-desc">{{ plan.description or 'Сбалансированный тариф для стабильного доступа без лишних переключений.' }}</p>
             <div class="cab-home-stat-meta" style="margin-bottom:12px">Есть промокод на скидку, баланс или дни? Активируйте его в отдельном разделе перед покупкой.</div>
-            <button class="btn btn-p btn-w" onclick="buyPlan({{ plan.id }})"><i class="bi bi-bag-check"></i> Купить</button>
+            <button class="btn btn-p btn-w" type="button" onclick="goToPlan({{ plan.id }})"><i class="bi bi-bag-check"></i> Купить</button>
           </article>
           {% else %}
           <div class="cab-home-empty">
@@ -935,12 +935,7 @@
 {% endblock %}
 
 {% block scripts %}
-async function buyPlan(id) {
-  var fd = new FormData(); fd.append('plan_id', id);
-  try {
-    var r = await cabinetJson('/cabinet/pay/balance', {method:'POST', body:fd});
-    if (r.data.ok) { showToast(r.data.message || 'Подписка оформлена', 'success'); setTimeout(function(){window.location.href=cabinetUrl('/cabinet/keys')},900); }
-    else { showToast(r.data.message || 'Ошибка', 'error'); }
-  } catch(e) { showToast('Ошибка сети', 'error'); }
+function goToPlan(id) {
+  window.location.href = cabinetUrl('/cabinet/plans?selected_plan=' + encodeURIComponent(id));
 }
 {% endblock %}
