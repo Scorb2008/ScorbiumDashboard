@@ -262,6 +262,7 @@ async def cabinet_auth(request: Request, db: AsyncSession = Depends(get_db)):
     if user.is_banned:
         return JSONResponse({"ok": False, "message": "Account is banned"}, status_code=403)
 
-    resp = JSONResponse({"ok": True, "redirect": "/cabinet/"})
+    redirect_path = "/cabinet/?miniapp=1" if init_data else "/cabinet/"
+    resp = JSONResponse({"ok": True, "redirect": redirect_path})
     set_session_cookie(resp, user.id, secure=_is_secure_request(request))
     return resp

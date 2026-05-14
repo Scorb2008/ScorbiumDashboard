@@ -104,10 +104,11 @@ async function startMiniAppLogin(force) {
   document.getElementById('miniapp-retry').style.display = 'none';
   setLoginState('Подключение...');
   try {
+    rememberMiniAppInitData(getMiniAppInitData());
     var r = await syncMiniAppSession({force:!!force, silent:false});
     if (r.ok) {
       document.getElementById('miniapp-home').style.display = '';
-      window.location.replace(cabinetUrl('/cabinet/'));
+      window.location.replace(r.redirect || cabinetUrl('/cabinet/?miniapp=1'));
     }
     else { showMiniAppFailure(r.message || 'Ошибка'); }
   } catch(e) { showMiniAppFailure('Ошибка сети'); }

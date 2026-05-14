@@ -129,3 +129,24 @@ async def test_cabinet_auth_oidc_uses_numeric_telegram_id(session):
 
     assert response.status_code == 200
     assert b'"ok":true' in response.body
+
+
+async def test_cabinet_auth_miniapp_redirects_back_to_miniapp(session):
+    request = _make_request(scheme="https")
+    request._json = {"initData": "test-init-data"}
+
+    async def _json():
+        return request._json
+
+    request.json = _json
+
+    with patch(
+        "app.api.cabinet.auth._verify_telegram_init_data",
+        return_value={
+            "user": '{"id": 1980894188, "username": "scorb_user", "first_name": "Scorb"}',
+        },
+    ):
+        response = await cabinet_auth(request, db=session)
+
+    assert response.status_code == 200
+    assert b'"redirect":"/cabinet/?miniapp=1"' in response.body

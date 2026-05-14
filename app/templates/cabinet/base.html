@@ -68,8 +68,19 @@ function getTelegramWebApp() {
 function getMiniAppInitData() {
   var tg = getTelegramWebApp();
   if (tg && tg.initData) return tg.initData;
-  try { return new URL(window.location.href).searchParams.get(window.CABINET_BOOT.initDataParam) || ""; }
+  try {
+    var queryValue = new URL(window.location.href).searchParams.get(window.CABINET_BOOT.initDataParam) || "";
+    if (queryValue) return queryValue;
+  } catch (e) {}
+  try { return sessionStorage.getItem('cabinetMiniAppInitData') || ""; }
   catch (e) { return ""; }
+}
+
+function rememberMiniAppInitData(value) {
+  var initData = String(value || '');
+  if (!initData) return;
+  try { sessionStorage.setItem('cabinetMiniAppInitData', initData); }
+  catch (e) {}
 }
 
 function cabinetUrl(path) {
@@ -145,6 +156,7 @@ async function syncMiniAppSession(options) {
   var opts = Object.assign({ force: false, silent: true }, options || {});
   var initData = getMiniAppInitData();
   if (!initData) return { ok: false, skipped: true };
+  rememberMiniAppInitData(initData);
   var lastSyncedAt = Number(sessionStorage.getItem('cabinetMiniAppSyncedAt') || 0);
   if (!opts.force && Date.now() - lastSyncedAt < 15000) return { ok: true, skipped: true };
   if (window.__cabinetMiniAppAuthPromise && !opts.force) return window.__cabinetMiniAppAuthPromise;
@@ -259,8 +271,10 @@ document.addEventListener('click', function(event) {
   var tg = getTelegramWebApp();
   if (tg && tg.initData) {
     document.body.classList.add('mini-mode');
+    rememberMiniAppInitData(tg.initData);
     try { tg.ready(); tg.expand(); if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes(); } catch (e) {}
   }
+  rememberMiniAppInitData(getMiniAppInitData());
   cleanMiniAppParamFromAddress();
   decorateCabinetLinks();
   if (window.CABINET_BOOT.isAuthenticated && getMiniAppInitData()) syncMiniAppSession({silent:true}).catch(function(){});
