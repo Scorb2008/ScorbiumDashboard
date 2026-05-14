@@ -7,6 +7,7 @@ from app.api.cabinet.auth import (
     _build_telegram_full_name,
     _extract_telegram_oidc_user_id,
     _is_secure_request,
+    _parse_telegram_user_id,
     cabinet_auth,
     get_telegram_init_data,
     is_telegram_miniapp_request,
@@ -75,6 +76,15 @@ def test_extract_telegram_oidc_user_id_rejects_out_of_range():
         pass
     else:
         raise AssertionError("Expected ValueError for out-of-range Telegram user id")
+
+
+def test_parse_telegram_user_id_rejects_zero_and_out_of_range():
+    for raw_user_id in (0, "0", "13693577412216818782"):
+        try:
+            _parse_telegram_user_id(raw_user_id)
+        except ValueError:
+            continue
+        raise AssertionError(f"Expected ValueError for invalid Telegram user id: {raw_user_id}")
 
 
 def test_build_telegram_full_name_prefers_split_names():

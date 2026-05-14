@@ -14,8 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db
 from app.core.config import config
-from app.models.admin import Admin, AdminRole
+from app.models.admin import Admin
 from app.services.admin import AdminService
+from app.services.admin_auth import authenticate_admin_credentials
 from app.services.bot_settings import BotSettingsService
 from app.utils.security import create_access_token, decode_access_token_full
 
@@ -115,29 +116,7 @@ async def login_submit(
 ):
     error_ctx = await _login_template_context(request, db, error="Неверный логин или пароль")
 
-    admin = None
-    admin = await AdminService(db).authenticate(username, password)
-    if admin:
-        pass
-    elif (
-        username == config.web.web_superadmin_username
-        and password == config.web.web_superadmin_password.get_secret_value()
-    ):
-        admin = await AdminService(db).get_by_username(username)
-        if not admin:
-            import bcrypt as _bcrypt
-            new_admin = Admin(
-                username=username,
-                password_hash=_bcrypt.hashpw(
-                    config.web.web_superadmin_password.get_secret_value().encode(),
-                    _bcrypt.gensalt()
-                ).decode(),
-                role=AdminRole.SUPERADMIN.value,
-            )
-            db.add(new_admin)
-            await db.commit()
-            await db.refresh(new_admin)
-            admin = new_admin
+    admin = await authenticate_admin_credentials(db, username, password)
 
     if not admin:
         # Add delay to prevent timing attacks

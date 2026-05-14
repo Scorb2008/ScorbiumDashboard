@@ -148,8 +148,9 @@ async def try_miniapp_auth(request: Request, db: AsyncSession):
         user_info = json.loads(tg_data.get("user", "{}"))
         if not user_info.get("id"):
             return None
+        user_id = _parse_telegram_user_id(user_info["id"])
         user, _ = await UserService(db).sync_telegram_profile(UserCreate(
-            id=user_info["id"],
+            id=user_id,
             username=user_info.get("username", ""),
             full_name=_build_telegram_full_name(
                 user_info.get("first_name", ""),
@@ -178,6 +179,10 @@ def _extract_telegram_oidc_user_id(payload: dict) -> int:
     subject and may exceed BIGINT. Persist only the Telegram numeric id.
     """
     raw_user_id = payload.get("id", 0)
+    return _parse_telegram_user_id(raw_user_id)
+
+
+def _parse_telegram_user_id(raw_user_id) -> int:
     user_id = int(raw_user_id)
     if user_id <= 0 or user_id > INT64_MAX:
         raise ValueError("Invalid Telegram user id")
@@ -227,7 +232,7 @@ async def cabinet_auth(request: Request, db: AsyncSession = Depends(get_db)):
         if tg_data and tg_data.get("user"):
             try:
                 user_info = json.loads(tg_data["user"])
-                user_id = int(user_info.get("id", 0))
+                user_id = _parse_telegram_user_id(user_info.get("id", 0))
             except (ValueError, TypeError, json.JSONDecodeError):
                 return JSONResponse({"ok": False, "message": "Invalid user data"}, status_code=401)
         else:
@@ -236,7 +241,10 @@ async def cabinet_auth(request: Request, db: AsyncSession = Depends(get_db)):
         tg_data = _verify_telegram_login(body)
         if not tg_data:
             return JSONResponse({"ok": False, "message": "Auth verification failed"}, status_code=401)
-        user_id = int(tg_data.get("id", 0))
+        try:
+            user_id = _parse_telegram_user_id(tg_data.get("id", 0))
+        except (TypeError, ValueError):
+            return JSONResponse({"ok": False, "message": "Invalid user ID"}, status_code=401)
         user_info = tg_data
 
     if not user_id:

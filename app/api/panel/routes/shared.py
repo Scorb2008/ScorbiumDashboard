@@ -17,7 +17,7 @@ from app.services.payment import PaymentService
 from app.services.support import SupportService
 from app.utils.log import log
 from app.utils.security import decode_access_token_full
-from app.core.permissions import has_permission
+from app.core.permissions import PERMISSIONS, has_permission
 
 _tpl_path = Path(__file__).resolve().parent.parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_tpl_path))
@@ -138,7 +138,13 @@ def _get_admin_info(request: Request) -> dict | None:
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         return None
-    return decode_access_token_full(token)
+    info = decode_access_token_full(token)
+    if not info:
+        return None
+    role = str(info.get("role", "")).strip().lower()
+    if role not in PERMISSIONS:
+        return None
+    return info
 
 
 def _check_session(request: Request) -> bool:
