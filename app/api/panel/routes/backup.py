@@ -31,6 +31,9 @@ CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO CURRENT_USER;
 GRANT ALL ON SCHEMA public TO public;
 """
+_UNSUPPORTED_RESTORE_SETTINGS = {
+    "transaction_timeout",
+}
 
 
 def _portable_dump_command(pg_uri: str) -> list[str]:
@@ -50,7 +53,64 @@ def _format_subprocess_error(result: subprocess.CompletedProcess[bytes]) -> str:
     stdout = result.stdout.decode(errors="replace").strip()
     raw = stderr or stdout or "unknown subprocess error"
     lines = [line.strip() for line in raw.splitlines() if line.strip()]
-    return " | ".join(lines[-6:])[:700]
+
+    error_index = next(
+        (
+            idx
+            for idx, line in enumerate(lines)
+            if any(marker in line.upper() for marker in ("ERROR:", "FATAL:", "PANIC:"))
+        ),
+        None,
+    )
+    if error_index is not None:
+        focused: list[str] = []
+        for line in lines[error_index:]:
+            upper = line.upper()
+            if "NOTICE:" in upper:
+                continue
+            if (
+                line.startswith("psql:")
+                or any(marker in upper for marker in ("ERROR:", "DETAIL:", "HINT:", "CONTEXT:"))
+            ):
+                focused.append(line)
+        if focused:
+            return " | ".join(focused[:6])[:700]
+
+    non_notice = [line for line in lines if "NOTICE:" not in line.upper()]
+    return " | ".join((non_notice or lines)[-6:])[:700]
+
+
+def _should_strip_restore_line(stripped: str, upper: str) -> bool:
+    if upper.startswith("\\CONNECT "):
+        return True
+    if upper.startswith("\\RESTRICT ") or upper.startswith("\\UNRESTRICT "):
+        return True
+    if upper.startswith("CREATE DATABASE ") or upper.startswith("ALTER DATABASE "):
+        return True
+    if upper.startswith("DROP SCHEMA ") and "PUBLIC" in upper:
+        return True
+    if upper.startswith("CREATE SCHEMA ") and "PUBLIC" in upper:
+        return True
+    if upper.startswith("ALTER SCHEMA ") and "PUBLIC" in upper:
+        return True
+    if upper.startswith("COMMENT ON SCHEMA ") and "PUBLIC" in upper:
+        return True
+    if upper.startswith("ALTER ") and " OWNER TO " in upper:
+        return True
+    if upper.startswith("GRANT ") or upper.startswith("REVOKE "):
+        return True
+
+    lower = stripped.lower()
+    if upper.startswith("SET "):
+        parts = stripped.rstrip(";").split(None, 2)
+        if len(parts) >= 2 and parts[1].lower() in _UNSUPPORTED_RESTORE_SETTINGS:
+            return True
+    if lower.startswith("select pg_catalog.set_config("):
+        for setting in _UNSUPPORTED_RESTORE_SETTINGS:
+            if f"'{setting}'" in lower:
+                return True
+
+    return False
 
 
 def _prepare_restore_sql(content: bytes) -> bytes:
@@ -62,21 +122,7 @@ def _prepare_restore_sql(content: bytes) -> bytes:
         stripped = line.strip()
         upper = stripped.upper()
 
-        if upper.startswith("\\CONNECT "):
-            continue
-        if upper.startswith("CREATE DATABASE ") or upper.startswith("ALTER DATABASE "):
-            continue
-        if upper.startswith("DROP SCHEMA ") and "PUBLIC" in upper:
-            continue
-        if upper.startswith("CREATE SCHEMA ") and "PUBLIC" in upper:
-            continue
-        if upper.startswith("ALTER SCHEMA ") and "PUBLIC" in upper:
-            continue
-        if upper.startswith("COMMENT ON SCHEMA ") and "PUBLIC" in upper:
-            continue
-        if upper.startswith("ALTER ") and " OWNER TO " in upper:
-            continue
-        if upper.startswith("GRANT ") or upper.startswith("REVOKE "):
+        if _should_strip_restore_line(stripped, upper):
             continue
 
         filtered.append(line)
