@@ -230,6 +230,21 @@ async function copyText(value, successText) {
   return false;
 }
 
+function isWebUrl(value) {
+  return /^https?:\/\//i.test(String(value || ''));
+}
+
+function triggerLinkOpen(target) {
+  var anchor = document.createElement('a');
+  anchor.href = target;
+  anchor.rel = 'noopener noreferrer';
+  anchor.target = isWebUrl(target) ? '_blank' : '_self';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+}
+
 function openExternal(url) {
   var tg = getTelegramWebApp();
   var target = String(url || '');
@@ -238,16 +253,49 @@ function openExternal(url) {
     return;
   }
   try {
-    if (tg && typeof tg.openLink === 'function') {
+    if (tg && typeof tg.openLink === 'function' && isWebUrl(target)) {
       tg.openLink(target);
       return;
     }
   } catch (e) {}
   try {
-    var opened = window.open(target, '_blank', 'noopener,noreferrer');
-    if (opened) return;
+    if (isWebUrl(target)) {
+      var opened = window.open(target, '_blank', 'noopener,noreferrer');
+      if (opened) return;
+    }
+  } catch (e) {}
+  try {
+    triggerLinkOpen(target);
+    return;
+  } catch (e) {}
+  try {
+    window.location.assign(target);
+    return;
   } catch (e) {}
   window.location.href = target;
+}
+
+async function copyInputValue(trigger, successText) {
+  var root = trigger && trigger.closest ? trigger.closest('.cp') : null;
+  var input = root ? root.querySelector('.inp') : null;
+  var text = input ? String(input.value || '') : '';
+  if (input) {
+    try {
+      input.focus();
+      input.removeAttribute('readonly');
+      input.select();
+      input.setSelectionRange(0, text.length);
+      input.setAttribute('readonly', 'readonly');
+    } catch (e) {}
+  }
+  return copyText(text, successText || 'Ссылка скопирована');
+}
+
+function openInputValue(trigger) {
+  var root = trigger && trigger.closest ? trigger.closest('.cp') : null;
+  var input = root ? root.querySelector('.inp') : null;
+  var text = input ? String(input.value || '') : '';
+  openExternal(text);
 }
 
 document.addEventListener('click', function(event) {

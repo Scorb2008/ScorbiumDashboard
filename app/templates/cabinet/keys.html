@@ -40,10 +40,11 @@
             readonly
             data-copy-url="{{ key.access_url }}"
             data-copy-success="Ссылка скопирована"
+            onclick="copyInputValue(this, 'Ссылка скопирована')"
             title="Нажмите, чтобы скопировать ссылку"
           >
-          <button class="btn btn-p" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована"><i class="bi bi-copy"></i></button>
-          <button class="btn btn-o" type="button" data-open-url="{{ key.access_url }}"><i class="bi bi-box-arrow-up-right"></i></button>
+          <button class="btn btn-p" type="button" onclick="copyInputValue(this, 'Ссылка скопирована')"><i class="bi bi-copy"></i></button>
+          <button class="btn btn-o" type="button" onclick="openInputValue(this)"><i class="bi bi-box-arrow-up-right"></i></button>
         </div>
         {% else %}
         <div class="ib"><i class="bi bi-hourglass-split cg"></i><div><strong>Подготовка</strong><span class="muted">Ключ появится автоматически</span></div></div>
