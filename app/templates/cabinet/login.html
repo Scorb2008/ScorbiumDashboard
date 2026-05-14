@@ -116,11 +116,21 @@ async function startMiniAppLogin(force) {
 (function() {
   var tg = getTelegramWebApp();
   if (tg && tg.initData) {
+    var hasInitDataInUrl = false;
+    try {
+      hasInitDataInUrl = new URL(window.location.href).searchParams.has(window.CABINET_BOOT.initDataParam);
+    } catch (e) {}
     document.getElementById('miniapp-status').style.display = '';
     document.getElementById('miniapp-login').style.display = '';
     document.getElementById('web-login').style.display = 'none';
     document.getElementById('login-hint').style.display = 'none';
-    startMiniAppLogin(true);
+    rememberMiniAppInitData(tg.initData);
+    if (!hasInitDataInUrl) {
+      setLoginState('Загрузка кабинета...');
+      window.location.replace(cabinetUrl('/cabinet/?miniapp=1'));
+      return;
+    }
+    showMiniAppFailure('Не удалось загрузить данные кабинета автоматически');
   } else { showWebLoginFallback(); }
 })();
 setTimeout(function() {
