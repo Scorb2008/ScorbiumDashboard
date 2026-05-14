@@ -58,6 +58,23 @@ def _is_admin(user_id: int) -> bool:
     return user_id in config.telegram.telegram_admin_ids
 
 
+async def _resolve_admin_panel_url(session) -> str:
+    """Resolve admin panel URL from current settings with fallback to site_url."""
+    settings = BotSettingsService(session)
+    url = (
+        (await settings.get("admin_panel_url"))
+        or (await settings.get("panel_url"))
+        or ""
+    )
+    url = url.strip()
+    if url:
+        return url.rstrip("/")
+    site_url = (config.web.site_url or "").strip()
+    if site_url:
+        return site_url.rstrip("/") + "/panel"
+    return ""
+
+
 def admin_kb(panel_url: str = "", maintenance: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
@@ -159,9 +176,7 @@ async def _admin_main_text() -> tuple[str, InlineKeyboardMarkup, str | None]:
         rev_week_val = rev_week_r.scalar_one()
         rev_week = float(rev_week_val) if rev_week_val else 0.0
 
-        panel_url = (await BotSettingsService(session).get("panel_url") or "").rstrip(
-            "/"
-        )
+        panel_url = await _resolve_admin_panel_url(session)
         maintenance = await BotSettingsService(session).is_maintenance_mode()
 
         expired_r = await session.execute(
@@ -2158,7 +2173,7 @@ async def _admin_main_text_extended() -> tuple[str, InlineKeyboardMarkup, str | 
         )
         rev_today = float(rev_today_r.scalar_one() or 0)
 
-        panel_url = (await BotSettingsService(session).get("panel_url") or "").rstrip("/")
+        panel_url = await _resolve_admin_panel_url(session)
         maintenance = await BotSettingsService(session).is_maintenance_mode()
 
     text = (
@@ -3065,12 +3080,6 @@ async def show_admin_panel(callback: CallbackQuery) -> None:
     if not _is_admin(callback.from_user.id):
         await callback.answer("❌ Доступ запрещён", show_alert=True)
         return
-    async with AsyncSessionFactory() as session:
-        from app.services.bot_settings import BotSettingsService
-
-        panel_url = (await BotSettingsService(session).get("panel_url") or "").rstrip(
-            "/"
-        )
     text, kb, _ = await _admin_main_text_extended()
     await callback.message.edit_text(
         text,
