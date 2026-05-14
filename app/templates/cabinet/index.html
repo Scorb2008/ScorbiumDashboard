@@ -407,6 +407,25 @@
     display: flex;
     flex-direction: column;
     gap: 18px;
+    max-height: 640px;
+    overflow-y: auto;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(88, 242, 200, 0.38) rgba(255, 255, 255, 0.04);
+  }
+
+  .cab-home-plan-list::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .cab-home-plan-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 999px;
+  }
+
+  .cab-home-plan-list::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(88, 242, 200, 0.72), rgba(79, 124, 255, 0.72));
+    border-radius: 999px;
   }
 
   .cab-home-sub {
@@ -733,6 +752,7 @@
         <div class="cab-home-hero-actions">
           <a href="/cabinet/plans" class="btn btn-p cab-home-hero-btn"><i class="bi bi-stars"></i> Смотреть тарифы</a>
           <a href="/cabinet/keys" class="btn btn-o cab-home-hero-btn"><i class="bi bi-key"></i> Открыть подписки</a>
+          <a href="/cabinet/promo" class="btn btn-o cab-home-hero-btn"><i class="bi bi-ticket-perforated"></i> Активировать промокод</a>
         </div>
       </div>
 
@@ -892,12 +912,13 @@
         </div>
 
         <div class="cab-home-plan-list">
-          {% for plan in plans[:3] %}
+          {% for plan in plans %}
           <article class="cab-home-plan">
             <div class="cab-home-plan-tag"><i class="bi bi-lightning-charge"></i>{{ plan.duration_days }} дн.</div>
             <h3 class="cab-home-plan-name">{{ plan.name }}</h3>
             <div class="cab-home-plan-price">{{ "%.0f"|format(plan.price) }} ₽</div>
             <p class="cab-home-plan-desc">{{ plan.description or 'Сбалансированный тариф для стабильного доступа без лишних переключений.' }}</p>
+            <div class="cab-home-stat-meta" style="margin-bottom:12px">Есть промокод на скидку, баланс или дни? Активируйте его в отдельном разделе перед покупкой.</div>
             <button class="btn btn-p btn-w" onclick="buyPlan({{ plan.id }})"><i class="bi bi-bag-check"></i> Купить</button>
           </article>
           {% else %}

@@ -25,6 +25,7 @@
           <a href="/cabinet/plans" class="nav-lnk {% if cp.startswith('/cabinet/plans') %}on{% endif %}"><i class="bi bi-stars"></i><span>Тарифы</span></a>
           <a href="/cabinet/keys" class="nav-lnk {% if cp.startswith('/cabinet/keys') %}on{% endif %}"><i class="bi bi-key"></i><span>Подписки</span></a>
           <a href="/cabinet/balance" class="nav-lnk {% if cp.startswith('/cabinet/balance') %}on{% endif %}"><i class="bi bi-wallet2"></i><span>Баланс</span></a>
+          <a href="/cabinet/promo" class="nav-lnk {% if cp.startswith('/cabinet/promo') %}on{% endif %}"><i class="bi bi-ticket-perforated"></i><span>Промокод</span></a>
           <a href="/cabinet/support" class="nav-lnk {% if cp.startswith('/cabinet/support') %}on{% endif %}"><i class="bi bi-chat-left-dots"></i><span>Поддержка</span></a>
           <a href="/cabinet/profile" class="nav-lnk {% if cp.startswith('/cabinet/profile') %}on{% endif %}"><i class="bi bi-person-circle"></i><span>Профиль</span></a>
           {% if user is defined and is_admin_user(user) %}
@@ -54,6 +55,7 @@
       <a href="/cabinet/" class="mnl {% if cp in ('/cabinet', '/cabinet/') %}on{% endif %}"><i class="bi bi-grid-1x2"></i><span>Обзор</span></a>
       <a href="/cabinet/plans" class="mnl {% if cp.startswith('/cabinet/plans') %}on{% endif %}"><i class="bi bi-stars"></i><span>Тарифы</span></a>
       <a href="/cabinet/keys" class="mnl {% if cp.startswith('/cabinet/keys') %}on{% endif %}"><i class="bi bi-key"></i><span>Ключи</span></a>
+      <a href="/cabinet/promo" class="mnl {% if cp.startswith('/cabinet/promo') %}on{% endif %}"><i class="bi bi-ticket-perforated"></i><span>Промо</span></a>
       <a href="/cabinet/support" class="mnl {% if cp.startswith('/cabinet/support') %}on{% endif %}"><i class="bi bi-chat-left-dots"></i><span>Чат</span></a>
       <a href="/cabinet/profile" class="mnl {% if cp.startswith('/cabinet/profile') %}on{% endif %}"><i class="bi bi-person"></i><span>Я</span></a>
     </nav>
@@ -189,14 +191,60 @@ function setMsg(el, ok, msg) {
 }
 
 async function copyText(value, successText) {
-  try { await navigator.clipboard.writeText(value); showToast(successText || 'Скопировано', 'success'); return true; }
-  catch (e) { showToast('Не удалось скопировать', 'error'); return false; }
+  var text = String(value || '');
+  if (!text) {
+    showToast('Пустая ссылка', 'error');
+    return false;
+  }
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      showToast(successText || 'Скопировано', 'success');
+      return true;
+    }
+  } catch (e) {}
+
+  try {
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    area.style.pointerEvents = 'none';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    area.setSelectionRange(0, area.value.length);
+    var copied = document.execCommand('copy');
+    document.body.removeChild(area);
+    if (copied) {
+      showToast(successText || 'Скопировано', 'success');
+      return true;
+    }
+  } catch (e) {}
+
+  showToast('Не удалось скопировать', 'error');
+  return false;
 }
 
 function openExternal(url) {
   var tg = getTelegramWebApp();
-  if (tg && typeof tg.openLink === 'function') { tg.openLink(url); return; }
-  window.open(url, '_blank', 'noopener');
+  var target = String(url || '');
+  if (!target) {
+    showToast('Ссылка недоступна', 'error');
+    return;
+  }
+  try {
+    if (tg && typeof tg.openLink === 'function') {
+      tg.openLink(target);
+      return;
+    }
+  } catch (e) {}
+  try {
+    var opened = window.open(target, '_blank', 'noopener,noreferrer');
+    if (opened) return;
+  } catch (e) {}
+  window.location.href = target;
 }
 
 (function() {

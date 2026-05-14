@@ -170,7 +170,7 @@ async function clearDatabase() {
   try {
     const meta = document.querySelector('meta[name="csrf-token"]');
     const csrf = meta ? meta.getAttribute('content') : '';
-    const r = await fetch('/panel/database/clear', {
+    const r = await fetch('/panel/backup/database/clear', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
