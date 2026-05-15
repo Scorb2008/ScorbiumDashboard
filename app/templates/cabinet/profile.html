@@ -110,7 +110,7 @@
             </div>
             <div class="cab-premium-row-actions">
               {% if key.access_url and key.access_url != 'pending' %}
-              <button class="btn btn-o" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована"><i class="bi bi-copy"></i> Копировать</button>
+              <button class="btn btn-o" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована" onclick="copyText(this.dataset.copyUrl || '', this.dataset.copySuccess || 'Ссылка скопирована'); return false;"><i class="bi bi-copy"></i> Копировать</button>
               {% else %}
               <div class="cab-premium-row-note">Ссылка появится автоматически после подготовки ключа.</div>
               {% endif %}

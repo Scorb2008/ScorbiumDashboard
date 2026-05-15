@@ -122,12 +122,13 @@ async function bootMiniAppLogin() {
 
   while (attempts < 25) {
     var tg = getTelegramWebApp();
-    if (tg && tg.initData) {
+    var initData = (tg && tg.initData) || getTelegramHashParam('tgWebAppData');
+    if (initData) {
       var hasInitDataInUrl = false;
       try {
         hasInitDataInUrl = new URL(window.location.href).searchParams.has(window.CABINET_BOOT.initDataParam);
       } catch (e) {}
-      rememberMiniAppInitData(tg.initData);
+      rememberMiniAppInitData(initData);
       if (!hasInitDataInUrl) {
         setLoginState('Загрузка кабинета...');
         window.location.replace(cabinetUrl('/cabinet/?miniapp=1'));

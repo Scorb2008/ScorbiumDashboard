@@ -422,7 +422,10 @@ def create_app() -> FastAPI:
             if "server" in resp.headers:
                 del resp.headers["server"]
 
-            if path.startswith("/api/") or path == "/metrics":
+            if is_cabinet:
+                resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+                resp.headers["Pragma"] = "no-cache"
+            elif path.startswith("/api/") or path == "/metrics":
                 resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
                 resp.headers["Pragma"] = "no-cache"
 

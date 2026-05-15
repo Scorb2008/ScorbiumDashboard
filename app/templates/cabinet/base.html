@@ -8,11 +8,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/bootstrap-icons.min.css">
-<link rel="stylesheet" href="/static/css/cabinet.css">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="/static/css/cabinet.css?v=miniapp-20260515b">
+<script src="https://telegram.org/js/telegram-web-app.js?62"></script>
 <script>
 try {
-  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)
+  var hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+  if (
+    (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) ||
+    hashParams.has('tgWebAppData') ||
+    hashParams.has('tgWebAppPlatform')
+  )
     document.documentElement.classList.add('tg-miniapp-client');
 } catch (e) {}
 </script>
@@ -72,9 +77,19 @@ function getTelegramWebApp() {
   catch (e) { return null; }
 }
 
+function getTelegramHashParam(name) {
+  try {
+    var rawHash = (window.location.hash || '').replace(/^#/, '');
+    if (!rawHash) return '';
+    return new URLSearchParams(rawHash).get(name) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 function hasTelegramMiniAppInitData() {
   var tg = getTelegramWebApp();
-  return !!(tg && tg.initData);
+  return !!((tg && tg.initData) || getTelegramHashParam('tgWebAppData'));
 }
 
 function hasMiniAppQueryHint() {
@@ -86,13 +101,29 @@ function hasMiniAppQueryHint() {
   }
 }
 
+function hasMiniAppHashHint() {
+  return !!(
+    getTelegramHashParam('tgWebAppData') ||
+    getTelegramHashParam('tgWebAppPlatform') ||
+    getTelegramHashParam('tgWebAppVersion') ||
+    getTelegramHashParam('tgWebAppThemeParams')
+  );
+}
+
 function isMiniAppRuntime() {
-  return !!(window.CABINET_BOOT.isMiniApp || hasTelegramMiniAppInitData() || hasMiniAppQueryHint());
+  return !!(
+    window.CABINET_BOOT.isMiniApp ||
+    hasTelegramMiniAppInitData() ||
+    hasMiniAppQueryHint() ||
+    hasMiniAppHashHint()
+  );
 }
 
 function getMiniAppInitData() {
   var tg = getTelegramWebApp();
   if (tg && tg.initData) return tg.initData;
+  var hashValue = getTelegramHashParam('tgWebAppData');
+  if (hashValue) return hashValue;
   try {
     var queryValue = new URL(window.location.href).searchParams.get(window.CABINET_BOOT.initDataParam) || "";
     if (queryValue) return queryValue;

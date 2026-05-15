@@ -35,7 +35,7 @@
         <div class="cp">
           <textarea
             class="inp"
-            onclick="copyInputValue(this, 'Ссылка скопирована')"
+            onclick="copyInputValue(this, 'Ссылка скопирована'); return false;"
             onfocus="this.select(); this.setSelectionRange(0, this.value.length);"
             title="Нажмите, чтобы скопировать ссылку"
             rows="3"
@@ -44,8 +44,8 @@
             autocomplete="off"
             autocorrect="off"
           >{{ key.access_url }}</textarea>
-          <button class="btn btn-p" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована"><i class="bi bi-copy"></i><span>Копировать</span></button>
-          <a class="btn btn-o" href="{{ key.access_url }}" data-open-url="{{ key.access_url }}"><i class="bi bi-box-arrow-up-right"></i><span>Открыть</span></a>
+          <button class="btn btn-p" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована" onclick="copyText(this.dataset.copyUrl || '', this.dataset.copySuccess || 'Ссылка скопирована'); return false;"><i class="bi bi-copy"></i><span>Копировать</span></button>
+          <a class="btn btn-o" href="{{ key.access_url }}" data-open-url="{{ key.access_url }}" onclick="return openInputValue(this, this.dataset.openUrl || this.href)"><i class="bi bi-box-arrow-up-right"></i><span>Открыть</span></a>
         </div>
         {% else %}
         <div class="ib"><i class="bi bi-hourglass-split cg"></i><div><strong>Подготовка</strong><span class="muted">Ключ появится автоматически</span></div></div>
