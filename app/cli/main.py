@@ -42,6 +42,25 @@ def create_table(title: str, columns: list) -> Table:
     return table
 
 
+def render_menu(title: str, items: list[tuple[str, str]], back_label: str = "Назад") -> None:
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="bold cyan", width=3)
+    table.add_column(style="white")
+
+    for key, label in items:
+        table.add_row(key, label)
+    table.add_row("0", back_label)
+
+    console.print(
+        Panel(
+            table,
+            title=f"[bold]{title}[/bold]",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+    )
+
+
 @click.group(invoke_without_command=True)
 @click.pass_context
 def cli(ctx: Context):
@@ -56,17 +75,21 @@ def menu():
     show_banner()
 
     while True:
-        click.echo("")
+        console.print()
         click.secho("Выберите раздел:", bold=True)
-        click.echo("  1. 👥 Пользователи")
-        click.echo("  2. 🔑 Подписки")
-        click.echo("  3. 📦 Тарифы")
-        click.echo("  4. 💳 Платежи")
-        click.echo("  5. 🗄️  База данных")
-        click.echo("  6. 🤖 Бот")
-        click.echo("  7. ⚙️  Система")
-        click.echo("  0. Выход")
-        click.echo("")
+        render_menu(
+            "Главное меню",
+            [
+                ("1", "👥 Пользователи"),
+                ("2", "🔑 Подписки"),
+                ("3", "📦 Тарифы"),
+                ("4", "💳 Платежи"),
+                ("5", "🗄️  База данных"),
+                ("6", "🤖 Бот"),
+                ("7", "⚙️  Система"),
+            ],
+            back_label="Выход",
+        )
 
         choice = click.prompt("Ваш выбор", type=click.Choice(["0", "1", "2", "3", "4", "5", "6", "7"]), show_choices=False)
 
@@ -91,17 +114,19 @@ def menu():
 
 def _menu_users():
     while True:
-        click.echo("")
-        click.secho("👥 ПОЛЬЗОВАТЕЛИ", bold=True, fg="cyan")
-        click.echo("  1. Список пользователей")
-        click.echo("  2. Поиск пользователя")
-        click.echo("  3. Информация о пользователе")
-        click.echo("  4. Забанить пользователя")
-        click.echo("  5. Разбанить пользователя")
-        click.echo("  6. Изменить баланс")
-        click.echo("  7. Подарить подписку")
-        click.echo("  0. Назад")
-        click.echo("")
+        console.print()
+        render_menu(
+            "👥 Пользователи",
+            [
+                ("1", "Список пользователей"),
+                ("2", "Поиск пользователя"),
+                ("3", "Информация о пользователе"),
+                ("4", "Забанить пользователя"),
+                ("5", "Разбанить пользователя"),
+                ("6", "Изменить баланс"),
+                ("7", "Подарить подписку"),
+            ],
+        )
 
         choice = click.prompt("Ваш выбор", type=click.Choice(["0","1","2","3","4","5","6","7"]), show_choices=False)
 
@@ -132,14 +157,16 @@ def _menu_users():
 
 def _menu_subs():
     while True:
-        click.echo("")
-        click.secho("🔑 ПОДПИСКИ", bold=True, fg="cyan")
-        click.echo("  1. Список подписок")
-        click.echo("  2. Создать подписку")
-        click.echo("  3. Продлить подписку")
-        click.echo("  4. Отозвать подписку")
-        click.echo("  0. Назад")
-        click.echo("")
+        console.print()
+        render_menu(
+            "🔑 Подписки",
+            [
+                ("1", "Список подписок"),
+                ("2", "Создать подписку"),
+                ("3", "Продлить подписку"),
+                ("4", "Отозвать подписку"),
+            ],
+        )
 
         choice = click.prompt("Ваш выбор", type=click.Choice(["0","1","2","3","4"]), show_choices=False)
 
@@ -161,13 +188,15 @@ def _menu_subs():
 
 def _menu_plans():
     while True:
-        click.echo("")
-        click.secho("📦 ТАРИФЫ", bold=True, fg="cyan")
-        click.echo("  1. Список тарифов")
-        click.echo("  2. Создать тариф")
-        click.echo("  3. Редактировать тариф")
-        click.echo("  0. Назад")
-        click.echo("")
+        console.print()
+        render_menu(
+            "📦 Тарифы",
+            [
+                ("1", "Список тарифов"),
+                ("2", "Создать тариф"),
+                ("3", "Редактировать тариф"),
+            ],
+        )
 
         choice = click.prompt("Ваш выбор", type=click.Choice(["0","1","2","3"]), show_choices=False)
 
@@ -186,12 +215,14 @@ def _menu_plans():
 
 def _menu_payments():
     while True:
-        click.echo("")
-        click.secho("💳 ПЛАТЕЖИ", bold=True, fg="cyan")
-        click.echo("  1. Список платежей")
-        click.echo("  2. Статистика платежей")
-        click.echo("  0. Назад")
-        click.echo("")
+        console.print()
+        render_menu(
+            "💳 Платежи",
+            [
+                ("1", "Список платежей"),
+                ("2", "Статистика платежей"),
+            ],
+        )
 
         choice = click.prompt("Ваш выбор", type=click.Choice(["0","1","2"]), show_choices=False)
 
@@ -207,13 +238,15 @@ def _menu_payments():
 
 def _menu_db():
     while True:
-        click.echo("")
-        click.secho("🗄️  БАЗА ДАННЫХ", bold=True, fg="cyan")
-        click.echo("  1. Статистика БД")
-        click.echo("  2. Очистить данные пользователей")
-        click.echo("  3. Запустить миграции")
-        click.echo("  0. Назад")
-        click.echo("")
+        console.print()
+        render_menu(
+            "🗄️  База данных",
+            [
+                ("1", "Статистика БД"),
+                ("2", "Очистить данные пользователей"),
+                ("3", "Запустить миграции"),
+            ],
+        )
 
         choice = click.prompt("Ваш выбор", type=click.Choice(["0","1","2","3"]), show_choices=False)
 
@@ -232,14 +265,16 @@ def _menu_db():
 
 def _menu_bot():
     while True:
-        click.echo("")
-        click.secho("🤖 БОТ", bold=True, fg="cyan")
-        click.echo("  1. Статус бота")
-        click.echo("  2. Все настройки")
-        click.echo("  3. Получить настройку")
-        click.echo("  4. Установить настройку")
-        click.echo("  0. Назад")
-        click.echo("")
+        console.print()
+        render_menu(
+            "🤖 Бот",
+            [
+                ("1", "Статус бота"),
+                ("2", "Все настройки"),
+                ("3", "Получить настройку"),
+                ("4", "Установить настройку"),
+            ],
+        )
 
         choice = click.prompt("Ваш выбор", type=click.Choice(["0","1","2","3","4"]), show_choices=False)
 
@@ -261,15 +296,17 @@ def _menu_bot():
 
 def _menu_system():
     while True:
-        click.echo("")
-        click.secho("⚙️  СИСТЕМА", bold=True, fg="cyan")
-        click.echo("  1. Проверка здоровья")
-        click.echo("  2. Список администраторов")
-        click.echo("  3. Добавить администратора")
-        click.echo("  4. Удалить администратора")
-        click.echo("  5. Показать логи")
-        click.echo("  0. Назад")
-        click.echo("")
+        console.print()
+        render_menu(
+            "⚙️  Система",
+            [
+                ("1", "Проверка здоровья"),
+                ("2", "Список администраторов"),
+                ("3", "Добавить администратора"),
+                ("4", "Удалить администратора"),
+                ("5", "Показать логи"),
+            ],
+        )
 
         choice = click.prompt("Ваш выбор", type=click.Choice(["0","1","2","3","4","5"]), show_choices=False)
 

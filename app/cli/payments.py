@@ -3,13 +3,16 @@ import asyncio
 from rich.console import Console
 from rich.table import Table
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 console = Console()
 
 STATUS_MAP = {
-    "success": "Успешно",
+    "succeeded": "Успешно",
     "pending": "Ожидание",
-    "failed": "Ошибка"
+    "failed": "Ошибка",
+    "cancelled": "Отменен",
+    "refunded": "Возврат",
 }
 
 STATUS_STYLE = {
@@ -20,10 +23,21 @@ STATUS_STYLE = {
 
 PROVIDER_MAP = {
     "yookassa": "ЮKassa",
+    "yookassa_sbp": "ЮKassa SBP",
     "cryptobot": "CryptoBot",
     "telegram_stars": "Telegram Stars",
-    "freekassa": "FreeKassa"
+    "freekassa": "FreeKassa",
+    "aikassa": "AiKassa",
+    "platega": "Platega",
+    "paypalych": "PayPalych",
+    "balance": "Баланс",
+    "topup": "Пополнение",
 }
+
+
+def _user_name(user) -> str:
+    name = (getattr(user, "full_name", "") or "").strip()
+    return f"{name} (@{user.username})" if user.username else (name or f"User #{user.id}")
 
 async def _list_payments(limit: int):
     from app.core.database import AsyncSessionFactory
@@ -55,9 +69,9 @@ async def _list_payments(limit: int):
             
             table.add_row(
                 str(payment.id),
-                f"{user.first_name} (@{user.username})" if user.username else user.first_name,
+                _user_name(user),
                 provider_text,
-                f"{payment.amount:.2f}",
+                f"{Decimal(payment.amount or 0):.2f}",
                 f"[{status_style}]{status_text}[/{status_style}]",
                 payment.created_at.strftime('%Y-%m-%d %H:%M') if payment.created_at else "-"
             )
@@ -72,7 +86,7 @@ async def _payment_stats():
     
     async with AsyncSessionFactory() as session:
         # Total revenue
-        stmt = select(func.sum(Payment.amount)).where(Payment.status == "success")
+        stmt = select(func.sum(Payment.amount)).where(Payment.status == "succeeded")
         result = await session.execute(stmt)
         total_revenue = result.scalar() or 0
         
@@ -80,7 +94,7 @@ async def _payment_stats():
         today = datetime.utcnow().date()
         stmt = select(func.sum(Payment.amount)).where(
             and_(
-                Payment.status == "success",
+                Payment.status == "succeeded",
                 func.date(Payment.created_at) == today
             )
         )
@@ -91,7 +105,7 @@ async def _payment_stats():
         week_start = datetime.utcnow() - timedelta(days=7)
         stmt = select(func.sum(Payment.amount)).where(
             and_(
-                Payment.status == "success",
+                Payment.status == "succeeded",
                 Payment.created_at >= week_start
             )
         )
@@ -102,7 +116,7 @@ async def _payment_stats():
         month_start = datetime.utcnow().replace(day=1)
         stmt = select(func.sum(Payment.amount)).where(
             and_(
-                Payment.status == "success",
+                Payment.status == "succeeded",
                 Payment.created_at >= month_start
             )
         )
@@ -111,7 +125,7 @@ async def _payment_stats():
         
         # By provider
         stmt = select(Payment.provider, func.sum(Payment.amount), func.count(Payment.id)).where(
-            Payment.status == "success"
+            Payment.status == "succeeded"
         ).group_by(Payment.provider)
         result = await session.execute(stmt)
         by_provider = result.all()
@@ -122,7 +136,7 @@ async def _payment_stats():
         total_count = result.scalar()
         
         # Success rate
-        stmt = select(func.count(Payment.id)).where(Payment.status == "success")
+        stmt = select(func.count(Payment.id)).where(Payment.status == "succeeded")
         result = await session.execute(stmt)
         success_count = result.scalar()
         

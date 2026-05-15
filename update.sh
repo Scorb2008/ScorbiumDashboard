@@ -17,6 +17,40 @@ success() { echo -e "${GREEN}[OK]${RESET}   $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${RESET} $*"; }
 error()   { echo -e "${RED}[ERR]${RESET}  $*" >&2; exit 1; }
 
+normalize_yes_no() {
+    local raw="${1:-}"
+    raw=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | xargs)
+    case "$raw" in
+        y|yes|д|да) echo "yes" ;;
+        n|no|н|нет|"") echo "no" ;;
+        *) echo "invalid" ;;
+    esac
+}
+
+confirm_action() {
+    local prompt="${1:-Продолжить?}"
+    local default="${2:-N}"
+    local answer normalized suffix
+
+    if [[ "$default" =~ ^[Yy]$ ]]; then
+        suffix="[Y/n]"
+    else
+        suffix="[y/N]"
+    fi
+
+    while true; do
+        read -rp "${prompt} ${suffix}: " answer
+        normalized=$(normalize_yes_no "${answer}")
+        if [[ "$normalized" == "yes" ]]; then
+            return 0
+        fi
+        if [[ "$normalized" == "no" ]]; then
+            return 1
+        fi
+        warn "Ответьте yes/y/да/д или no/n/нет/н."
+    done
+}
+
 COMPOSE_FILE="docker-compose.prod.yml"
 
 echo -e "${BOLD}${CYAN}"
@@ -54,8 +88,7 @@ preflight() {
     app_status=$(docker inspect --format='{{.State.Health.Status}}' vpn_app 2>/dev/null || echo "unknown")
     if [[ "$app_status" != "healthy" ]]; then
         warn "App не healthy (статус: ${app_status}). Обновление может быть рискованным."
-        read -rp "Продолжить? [y/N]: " CONFIRM; CONFIRM=${CONFIRM:-N}
-        [[ ! "$CONFIRM" =~ ^[Yy]$ ]] && exit 1
+        confirm_action "Продолжить?" "N" || exit 1
     else
         success "App healthy"
     fi
@@ -92,8 +125,7 @@ preflight() {
     if [[ -f update.lock ]]; then
         warn "Найден update.lock — предыдущее обновление могло не завершиться."
         warn "Проверьте состояние контейнеров перед продолжением."
-        read -rp "Продолжить? [y/N]: " CONFIRM; CONFIRM=${CONFIRM:-N}
-        [[ ! "$CONFIRM" =~ ^[Yy]$ ]] && exit 1
+        confirm_action "Продолжить?" "N" || exit 1
         rm -f update.lock
     fi
 
@@ -184,9 +216,14 @@ if git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null; then
     fi
 else
     warn "Есть незакоммиченные изменения. git pull может вызвать конфликт."
-    read -rp "Продолжить? [y/N]: " CONFIRM; CONFIRM=${CONFIRM:-N}
-    [[ ! "$CONFIRM" =~ ^[Yy]$ ]] && exit 1
-    GIT_PULL_OUTPUT=$(git pull --ff-only 2>&1) || error "git pull failed:\n${GIT_PULL_OUTPUT}"
+    git status --short || true
+    confirm_action "Продолжить?" "N" || exit 1
+    GIT_PULL_OUTPUT=$(git pull --ff-only 2>&1) || {
+        if echo "$GIT_PULL_OUTPUT" | grep -qi "Could not resolve host"; then
+            error "git pull failed:\n${GIT_PULL_OUTPUT}\nПохоже на проблему DNS/сети. Проверьте интернет и повторите запуск."
+        fi
+        error "git pull failed:\n${GIT_PULL_OUTPUT}"
+    }
     success "Код обновлён (с локальными изменениями)"
 fi
 
@@ -199,6 +236,8 @@ if [[ -n "$NEW_VER" && "$NEW_VER" != "$OLD_VER" ]]; then
         sed -i '' "s/^APP_VERSION=.*/APP_VERSION=${NEW_VER}/" .env
     fi
     info "Версия: ${OLD_VER} → ${NEW_VER}"
+elif [[ -n "$NEW_VER" ]]; then
+    info "Версия не изменилась: ${NEW_VER}"
 fi
 
 # Sync TELEGRAM_WEBHOOK_URL
@@ -233,8 +272,7 @@ if [[ ! -f "$CERT_PATH" ]]; then
     else
         warn "SSL сертификат не найден: ${CERT_PATH}"
         warn "Попробуйте: certbot certonly --standalone -d ${DOMAIN}"
-        read -rp "Продолжить без SSL? [y/N]: " CONFIRM; CONFIRM=${CONFIRM:-N}
-        [[ ! "$CONFIRM" =~ ^[Yy]$ ]] && exit 1
+        confirm_action "Продолжить без SSL?" "N" || exit 1
         USE_SSL=false
         warn "Продолжаю в HTTP-only режиме. Telegram webhook и HTTPS-вход будут недоступны, пока сертификат не появится."
     fi
@@ -643,7 +681,11 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║  ✅  Обновление завершено                        ║${RESET}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════╝${RESET}"
 echo ""
-echo -e "  Версия: ${BOLD}${OLD_VER}${RESET} → ${BOLD}${NEW_VER:-$OLD_VER}${RESET}"
+if [[ -n "${NEW_VER:-}" && "$NEW_VER" != "$OLD_VER" ]]; then
+    echo -e "  Версия: ${BOLD}${OLD_VER}${RESET} → ${BOLD}${NEW_VER}${RESET}"
+else
+    echo -e "  Версия: ${BOLD}${NEW_VER:-$OLD_VER}${RESET} (без изменений)"
+fi
 if [[ "$USE_SSL" != "true" ]]; then
     echo -e "  Панель: ${CYAN}http://${DOMAIN}/panel/${RESET}"
 elif [[ "$HTTPS_PORT" == "443" ]]; then

@@ -3,6 +3,7 @@ import asyncio
 from rich.console import Console
 from rich.table import Table
 from datetime import datetime
+from decimal import Decimal
 
 console = Console()
 
@@ -18,14 +19,30 @@ STATUS_STYLE = {
     "revoked": "red"
 }
 
+
+def _user_name(user) -> str:
+    name = (getattr(user, "full_name", "") or "").strip()
+    return f"{name} (@{user.username})" if user.username else (name or f"User #{user.id}")
+
+
+def _plan_name(vpn_key) -> str:
+    if getattr(vpn_key, "plan", None) and getattr(vpn_key.plan, "name", None):
+        return vpn_key.plan.name
+    return vpn_key.name or f"Ключ #{vpn_key.id}"
+
 async def _list_subs(status: str, limit: int):
     from app.core.database import AsyncSessionFactory
     from app.models.vpn_key import VpnKey
     from app.models.user import User
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
     
     async with AsyncSessionFactory() as session:
-        stmt = select(VpnKey, User).join(User, VpnKey.user_id == User.id)
+        stmt = (
+            select(VpnKey, User)
+            .join(User, VpnKey.user_id == User.id)
+            .options(selectinload(VpnKey.plan))
+        )
         
         if status != "all":
             stmt = stmt.where(VpnKey.status == status)
@@ -48,11 +65,11 @@ async def _list_subs(status: str, limit: int):
             
             table.add_row(
                 str(vpn_key.id),
-                f"{user.first_name} (@{user.username})" if user.username else user.first_name,
-                vpn_key.plan_name or "-",
+                _user_name(user),
+                _plan_name(vpn_key),
                 f"[{style}]{status_text}[/{style}]",
                 vpn_key.expires_at.strftime('%Y-%m-%d') if vpn_key.expires_at else "-",
-                f"{vpn_key.price or 0:.2f}"
+                f"{Decimal(vpn_key.price or 0):.2f}"
             )
         
         console.print(table)
@@ -62,12 +79,10 @@ async def _create_sub(user_id: int, plan_id: int = None, days: int = None, name:
     from app.core.database import AsyncSessionFactory
     from app.models.user import User
     from app.models.plan import Plan
-    from app.models.vpn_key import VpnKey
     from sqlalchemy import select
-    from datetime import timedelta
+    from app.services.vpn_key import VpnKeyService
     
     async with AsyncSessionFactory() as session:
-        # Verify user exists
         stmt = select(User).where(User.id == user_id)
         result = await session.execute(stmt)
         user = result.scalar_one_or_none()
@@ -76,10 +91,9 @@ async def _create_sub(user_id: int, plan_id: int = None, days: int = None, name:
             click.secho(f"Пользователь с ID {user_id} не найден", fg="red")
             return
         
-        click.echo(f"Пользователь: {user.first_name} {user.last_name}")
+        click.echo(f"Пользователь: {_user_name(user)}")
         
         if plan_id:
-            # Create from plan
             stmt = select(Plan).where(Plan.id == plan_id)
             result = await session.execute(stmt)
             plan = result.scalar_one_or_none()
@@ -90,53 +104,47 @@ async def _create_sub(user_id: int, plan_id: int = None, days: int = None, name:
             
             duration_days = plan.duration_days
             plan_name = plan.name
-            price = plan.price
         elif days and name:
             duration_days = days
             plan_name = name
-            price = 0
         else:
             click.secho("Укажите --plan-id или --days и --name", fg="red")
             return
         
-        if not click.confirm(f"Создать подписку '{plan_name}' на {duration_days} дней для {user.first_name}?", default=True):
+        if not click.confirm(f"Создать подписку '{plan_name}' на {duration_days} дней для {_user_name(user)}?", default=True):
             click.secho("Отменено", fg="yellow")
             return
         
-        expires_at = datetime.utcnow() + timedelta(days=duration_days)
-        
-        vpn_key = VpnKey(
-            user_id=user.id,
-            plan_id=plan_id,
-            plan_name=plan_name,
-            key="manual_creation",
-            status="active",
-            expires_at=expires_at,
-            price=price
-        )
-        
-        session.add(vpn_key)
+        service = VpnKeyService(session)
+        if plan_id:
+            vpn_key = await service.provision(user.id, plan)
+        else:
+            vpn_key = await service.provision_days(user.id, duration_days, name=plan_name)
+
+        if not vpn_key:
+            await session.rollback()
+            click.secho("Не удалось создать подписку: VPN-панель не вернула ключ", fg="red")
+            return
+
         await session.commit()
         
         click.secho(f"✓ Подписка создана (ID: {vpn_key.id})", fg="green", bold=True)
         click.echo(f"  Тариф: {plan_name}")
-        click.echo(f"  Истекает: {expires_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        click.echo(f"  Истекает: {vpn_key.expires_at.strftime('%Y-%m-%d %H:%M:%S') if vpn_key.expires_at else '-'}")
 
 async def _extend_sub(key_id: int, days: int):
     from app.core.database import AsyncSessionFactory
-    from app.models.vpn_key import VpnKey
-    from sqlalchemy import select
+    from app.services.vpn_key import VpnKeyService
     
     async with AsyncSessionFactory() as session:
-        stmt = select(VpnKey).where(VpnKey.id == key_id)
-        result = await session.execute(stmt)
-        vpn_key = result.scalar_one_or_none()
+        service = VpnKeyService(session)
+        vpn_key = await service.get_by_id(key_id)
         
         if not vpn_key:
             click.secho(f"Подписка с ID {key_id} не найдена", fg="red")
             return
         
-        click.echo(f"Подписка: {vpn_key.plan_name} (ID: {vpn_key.id})")
+        click.echo(f"Подписка: {_plan_name(vpn_key)} (ID: {vpn_key.id})")
         click.echo(f"Текущий статус: {STATUS_MAP.get(vpn_key.status, vpn_key.status)}")
         click.echo(f"Истекает: {vpn_key.expires_at.strftime('%Y-%m-%d %H:%M:%S') if vpn_key.expires_at else '-'}")
         
@@ -144,34 +152,24 @@ async def _extend_sub(key_id: int, days: int):
             click.secho("Отменено", fg="yellow")
             return
         
-        if vpn_key.status == "expired":
-            vpn_key.status = "active"
-        
-        from datetime import timedelta
-        if vpn_key.expires_at and vpn_key.expires_at > datetime.utcnow():
-            vpn_key.expires_at = vpn_key.expires_at + timedelta(days=days)
-        else:
-            vpn_key.expires_at = datetime.utcnow() + timedelta(days=days)
-        
+        vpn_key = await service.extend(key_id, days)
         await session.commit()
         
         click.secho(f"✓ Подписка продлена до {vpn_key.expires_at.strftime('%Y-%m-%d %H:%M:%S')}", fg="green", bold=True)
 
 async def _revoke_sub(key_id: int):
     from app.core.database import AsyncSessionFactory
-    from app.models.vpn_key import VpnKey
-    from sqlalchemy import select
+    from app.services.vpn_key import VpnKeyService
     
     async with AsyncSessionFactory() as session:
-        stmt = select(VpnKey).where(VpnKey.id == key_id)
-        result = await session.execute(stmt)
-        vpn_key = result.scalar_one_or_none()
+        service = VpnKeyService(session)
+        vpn_key = await service.get_by_id(key_id)
         
         if not vpn_key:
             click.secho(f"Подписка с ID {key_id} не найдена", fg="red")
             return
         
-        click.echo(f"Подписка: {vpn_key.plan_name} (ID: {vpn_key.id})")
+        click.echo(f"Подписка: {_plan_name(vpn_key)} (ID: {vpn_key.id})")
         click.echo(f"Статус: {STATUS_MAP.get(vpn_key.status, vpn_key.status)}")
         
         if vpn_key.status == "revoked":
@@ -182,7 +180,7 @@ async def _revoke_sub(key_id: int):
             click.secho("Отменено", fg="yellow")
             return
         
-        vpn_key.status = "revoked"
+        await service.revoke(key_id)
         await session.commit()
         
         click.secho(f"✓ Подписка {key_id} отозвана", fg="green", bold=True)

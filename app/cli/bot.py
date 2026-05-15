@@ -6,6 +6,21 @@ from datetime import datetime
 
 console = Console()
 
+
+def _telegram_token_value():
+    from app.core.config import config
+
+    telegram = getattr(config, "telegram", None)
+    secret = getattr(telegram, "telegram_bot_token", None)
+    return secret.get_secret_value() if secret else ""
+
+
+def _telegram_protocol():
+    from app.core.config import config
+
+    telegram = getattr(config, "telegram", None)
+    return getattr(telegram, "telegram_type_protocol", "unknown")
+
 async def _bot_status():
     from app.core.database import AsyncSessionFactory
     from app.models.admin import Admin
@@ -26,7 +41,7 @@ async def _bot_status():
         click.secho("СТАТУС БОТА", bold=True, fg="cyan")
         click.echo("=" * 50)
         
-        bot_token = config.telegram.bot_token if hasattr(config, 'telegram') else None
+        bot_token = _telegram_token_value()
         if bot_token:
             click.secho("  ✓ Токен бота: настроен", fg="green")
         else:
@@ -35,7 +50,7 @@ async def _bot_status():
         click.echo(f"  Администраторов: {admin_count}")
         click.echo(f"  Настроек: {settings_count}")
         
-        protocol = config.telegram.type_protocol if hasattr(config, 'telegram') else "unknown"
+        protocol = _telegram_protocol()
         click.echo(f"  Протокол: {protocol}")
         
         click.echo("")

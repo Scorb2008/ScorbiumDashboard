@@ -7,6 +7,14 @@ from datetime import datetime
 
 console = Console()
 
+
+def _telegram_token_value():
+    from app.core.config import config
+
+    telegram = getattr(config, "telegram", None)
+    secret = getattr(telegram, "telegram_bot_token", None)
+    return secret.get_secret_value() if secret else ""
+
 async def _health_check():
     from app.core.database import AsyncSessionFactory
     from app.core.config import config
@@ -30,7 +38,7 @@ async def _health_check():
     click.echo("")
     click.echo("Проверка токена бота...")
     try:
-        bot_token = config.telegram.bot_token if hasattr(config, 'telegram') else None
+        bot_token = _telegram_token_value()
         if bot_token:
             click.secho("  ✓ Токен бота: настроен", fg="green")
         else:
