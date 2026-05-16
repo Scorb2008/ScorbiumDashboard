@@ -6,7 +6,7 @@
     <h2>Подписки</h2>
     <div class="r">
       <a href="/cabinet/plans" class="btn btn-p"><i class="bi bi-stars"></i> Купить</a>
-      <a href="/cabinet/guides" class="btn btn-o"><i class="bi bi-phone"></i> Инструкции</a>
+      <a href="/cabinet/guides" class="btn btn-p"><i class="bi bi-phone"></i> Инструкции</a>
     </div>
   </div>
 
@@ -44,7 +44,7 @@
           <div class="cp-url" title="{{ key.access_url }}">{{ key.access_url }}</div>
           <div class="cp-actions">
             <button class="btn btn-p btn-sm" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована" onclick="copyText(this.dataset.copyUrl || '', this.dataset.copySuccess || 'Ссылка скопирована'); return false;"><i class="bi bi-copy"></i><span>Копировать</span></button>
-            <a class="btn btn-o btn-sm" href="{{ key.access_url }}" data-open-url="{{ key.access_url }}" onclick="return openInputValue(this, this.dataset.openUrl || this.href)"><i class="bi bi-box-arrow-up-right"></i><span>Открыть</span></a>
+            <a class="btn btn-p btn-sm" href="{{ key.access_url }}" data-open-url="{{ key.access_url }}" onclick="return openInputValue(this, this.dataset.openUrl || this.href)"><i class="bi bi-box-arrow-up-right"></i><span>Открыть</span></a>
           </div>
         </div>
         {% else %}

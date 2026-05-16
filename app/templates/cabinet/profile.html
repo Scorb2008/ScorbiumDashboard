@@ -3,6 +3,23 @@
 
 {% block head %}
 <style>{% include "cabinet/_premium_section_styles.html" %}</style>
+<style>
+  .cab-premium-actions .btn,
+  .cab-premium-panel-head .btn,
+  .cab-premium-row-actions .btn {
+    background: linear-gradient(135deg, rgba(88, 242, 200, 0.96), rgba(138, 198, 255, 0.92));
+    color: #051118;
+    border: 1px solid rgba(88, 242, 200, 0.28);
+    box-shadow: 0 16px 28px rgba(88, 242, 200, 0.16);
+  }
+
+  .cab-premium-actions .btn:hover,
+  .cab-premium-panel-head .btn:hover,
+  .cab-premium-row-actions .btn:hover {
+    filter: brightness(1.03);
+    transform: translateY(-1px);
+  }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -26,8 +43,8 @@
           <h2>{{ user.full_name or 'Пользователь' }}</h2>
           <p>{% if user.username %}@{{ user.username }}{% else %}ID {{ user.id }}{% endif %}</p>
           <div class="cab-premium-actions">
-            <a href="/cabinet/referrals" class="btn btn-o"><i class="bi bi-people"></i> Рефералы</a>
-            <a href="/cabinet/language" class="btn btn-o"><i class="bi bi-translate"></i> Язык</a>
+            <a href="/cabinet/referrals" class="btn btn-p"><i class="bi bi-people"></i> Рефералы</a>
+            <a href="/cabinet/language" class="btn btn-p"><i class="bi bi-translate"></i> Язык</a>
             <a href="/cabinet/balance" class="btn btn-p"><i class="bi bi-wallet2"></i> Баланс</a>
           </div>
         </div>
@@ -84,7 +101,7 @@
             <h2>Подписки</h2>
             <p>Краткий обзор последних ключей и быстрый доступ к копированию.</p>
           </div>
-          <a href="/cabinet/keys" class="btn btn-o">Все</a>
+          <a href="/cabinet/keys" class="btn btn-p">Все</a>
         </div>
 
         {% if keys %}
@@ -110,7 +127,7 @@
             </div>
             <div class="cab-premium-row-actions">
               {% if key.access_url and key.access_url != 'pending' %}
-              <button class="btn btn-o" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована" onclick="copyText(this.dataset.copyUrl || '', this.dataset.copySuccess || 'Ссылка скопирована'); return false;"><i class="bi bi-copy"></i> Копировать</button>
+              <button class="btn btn-p" type="button" data-copy-url="{{ key.access_url }}" data-copy-success="Ссылка скопирована" onclick="copyText(this.dataset.copyUrl || '', this.dataset.copySuccess || 'Ссылка скопирована'); return false;"><i class="bi bi-copy"></i> Копировать</button>
               {% else %}
               <div class="cab-premium-row-note">Ссылка появится автоматически после подготовки ключа.</div>
               {% endif %}
@@ -132,7 +149,7 @@
             <h2>Платежи</h2>
             <p>Последние пополнения и покупки в кабинете.</p>
           </div>
-          <a href="/cabinet/balance" class="btn btn-o">История</a>
+          <a href="/cabinet/balance" class="btn btn-p">История</a>
         </div>
 
         {% if payments %}

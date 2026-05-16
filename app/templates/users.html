@@ -88,6 +88,75 @@
   .users-panel-action i {
     font-size: .82rem;
   }
+
+  #bulkBar {
+    width: min(calc(100vw - 24px), 880px);
+  }
+
+  .users-panel-bulk {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .users-panel-bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .users-panel-action.is-success {
+    border-color: rgba(0, 212, 170, .28);
+    background: linear-gradient(135deg, rgba(0, 212, 170, .2), rgba(16, 185, 129, .12));
+    color: #9bffea;
+  }
+
+  .users-panel-action.is-success:hover {
+    border-color: rgba(0, 212, 170, .56);
+    background: linear-gradient(135deg, rgba(0, 212, 170, .3), rgba(16, 185, 129, .18));
+    color: #d9fff7;
+  }
+
+  .users-panel-action.is-warning {
+    border-color: rgba(250, 204, 21, .26);
+    background: rgba(250, 204, 21, .1);
+    color: #fde68a;
+  }
+
+  .users-panel-action.is-warning:hover {
+    border-color: rgba(250, 204, 21, .44);
+    background: rgba(250, 204, 21, .16);
+    color: #fef3c7;
+  }
+
+  .users-panel-action.is-info {
+    border-color: rgba(96, 165, 250, .24);
+    background: rgba(96, 165, 250, .1);
+    color: #bfdbfe;
+  }
+
+  .users-panel-action.is-info:hover {
+    border-color: rgba(96, 165, 250, .42);
+    background: rgba(96, 165, 250, .16);
+    color: #dbeafe;
+  }
+
+  @media (max-width: 767px) {
+    .users-panel-bulk {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .users-panel-bulk-actions {
+      width: 100%;
+    }
+
+    .users-panel-bulk-actions .users-panel-action {
+      flex: 1 1 calc(50% - 8px);
+      justify-content: center;
+    }
+  }
 </style>
 <!-- Advanced filters -->
 <div class="card p-3 mb-3" id="filterPanel" style="display:none">
@@ -162,24 +231,26 @@
 <!-- Bulk action bar -->
 <div id="bulkBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 px-3 py-2 rounded-3 shadow-lg"
      style="background:var(--bg-elevated);border:1px solid var(--border-glow);display:none;z-index:1050;backdrop-filter:blur(20px)">
-  <div class="d-flex align-items-center gap-3">
-    <span style="font-size:.85rem;font-weight:600;color:var(--accent)"><span id="bulkCount">0</span> выбрано</span>
+  <div class="users-panel-bulk">
+    <span style="font-size:.85rem;font-weight:700;color:var(--accent)"><span id="bulkCount">0</span> выбрано</span>
     <div class="vr" style="opacity:.2"></div>
-    <button class="btn btn-sm btn-outline-danger" onclick="bulkAction('ban')" title="Забанить">
-      <i class="bi bi-ban me-1"></i>Бан
-    </button>
-    <button class="btn btn-sm btn-outline-success" onclick="bulkAction('unban')" title="Разбанить">
-      <i class="bi bi-unlock me-1"></i>Разбан
-    </button>
-    <button class="btn btn-sm btn-outline-warning" onclick="openBulkBalance()" title="Пополнить баланс">
-      <i class="bi bi-plus-circle me-1"></i>Баланс
-    </button>
-    <button class="btn btn-sm btn-outline-info" onclick="openBulkGift()" title="Подарить подписку">
-      <i class="bi bi-gift me-1"></i>Подписка
-    </button>
-    <button class="btn btn-sm btn-outline-secondary" onclick="clearSelection()" title="Снять выделение">
-      <i class="bi bi-x-lg"></i>
-    </button>
+    <div class="users-panel-bulk-actions">
+      <button class="users-panel-action is-danger" onclick="bulkAction('ban')" title="Забанить">
+        <i class="bi bi-ban"></i><span>Бан</span>
+      </button>
+      <button class="users-panel-action is-success" onclick="bulkAction('unban')" title="Разбанить">
+        <i class="bi bi-unlock"></i><span>Разбан</span>
+      </button>
+      <button class="users-panel-action is-warning" onclick="openBulkBalance()" title="Пополнить баланс">
+        <i class="bi bi-plus-circle"></i><span>Баланс</span>
+      </button>
+      <button class="users-panel-action is-info" onclick="openBulkGift()" title="Подарить подписку">
+        <i class="bi bi-gift"></i><span>Подписка</span>
+      </button>
+      <button class="users-panel-action is-muted" onclick="clearSelection()" title="Снять выделение">
+        <i class="bi bi-x-lg"></i><span>Сбросить</span>
+      </button>
+    </div>
   </div>
 </div>
 
