@@ -346,7 +346,9 @@ async def cabinet_index(request: Request, db: AsyncSession = Depends(get_db)):
             })
         svc = await BotSettingsService(db).get_all()
         plans = await PlanService(db).get_all(only_active=True)
-        keys = await VpnKeyService(db).get_active_for_user(user.id)
+        key_service = VpnKeyService(db)
+        keys = await key_service.get_active_for_user(user.id)
+        await key_service.refresh_traffic_for_keys(keys)
         response = templates.TemplateResponse("cabinet/index.html", {
             "request": request, "app_name": config.web.app_name,
             "app_version": config.web.app_version,
@@ -373,7 +375,9 @@ async def cabinet_profile(request: Request, db: AsyncSession = Depends(get_db)):
     user = await _require_active_user(request, db)
     if not user:
         return RedirectResponse(url=_cabinet_redirect_url(request), status_code=302)
-    keys = await VpnKeyService(db).get_all_for_user(user.id)
+    key_service = VpnKeyService(db)
+    keys = await key_service.get_all_for_user(user.id)
+    await key_service.refresh_traffic_for_keys(keys)
     payments = await PaymentService(db).get_all(user_id=user.id, limit=50)
     referrals = await ReferralService(db).count_referrals(user.id)
     response = templates.TemplateResponse("cabinet/profile.html", {
@@ -391,7 +395,9 @@ async def cabinet_keys(request: Request, db: AsyncSession = Depends(get_db)):
     user = await _require_active_user(request, db)
     if not user:
         return RedirectResponse(url=_cabinet_redirect_url(request), status_code=302)
-    keys = await VpnKeyService(db).get_all_for_user(user.id)
+    key_service = VpnKeyService(db)
+    keys = await key_service.get_all_for_user(user.id)
+    await key_service.refresh_traffic_for_keys(keys)
     response = templates.TemplateResponse("cabinet/keys.html", {
         "request": request, "app_name": config.web.app_name,
         "user": user, "keys": keys, "now": datetime.now(timezone.utc),

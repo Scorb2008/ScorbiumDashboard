@@ -69,12 +69,13 @@ async def pg_users(request: Request):
         download = u.get("download", 0) or 0
         upload = u.get("upload", 0) or 0
         used = round((download + upload) / 1073741824, 2)
-        limit = u.get("data_limit", 0) or 0
-        limit_str = f"{round(limit / 1073741824, 1)} GB" if limit else "∞"
+        limit_bytes = u.get("data_limit", 0) or 0
+        limit_gb = round(limit_bytes / 1073741824, 1) if limit_bytes else 0
+        limit_str = f"{limit_gb} GB" if limit_bytes else "∞"
         username = html.escape(str(u.get("username", "")))
         expire = _fmt_date(u.get("expire"))
         created = _fmt_date(u.get("created_at"))
-        traffic_color = "#22c55e" if limit == 0 or used < limit * 0.8 else ("#eab308" if used < limit else "#ef4444")
+        traffic_color = "#22c55e" if limit_gb == 0 or used < limit_gb * 0.8 else ("#eab308" if used < limit_gb else "#ef4444")
         rows += f"""<div class="user-row" style="gap:.5rem;padding:.5rem .75rem">
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">

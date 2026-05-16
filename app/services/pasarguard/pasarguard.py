@@ -114,6 +114,54 @@ class PasarguardService(VpnPanelInterface):
     def __init__(self) -> None:
         self._client = MarzbanClient()
 
+    @staticmethod
+    def _coerce_int(value: object) -> int:
+        if value in (None, "", False):
+            return 0
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _normalize_user_payload(self, user: dict | None) -> dict | None:
+        if not isinstance(user, dict):
+            return user
+
+        normalized = dict(user)
+        used_traffic = self._coerce_int(normalized.get("used_traffic"))
+        lifetime_used_traffic = self._coerce_int(
+            normalized.get("lifetime_used_traffic")
+        )
+        download = normalized.get("download")
+        upload = normalized.get("upload")
+
+        if download is None and upload is None:
+            normalized["download"] = used_traffic
+            normalized["upload"] = 0
+        else:
+            normalized["download"] = self._coerce_int(download)
+            normalized["upload"] = self._coerce_int(upload)
+
+        normalized["used_traffic"] = used_traffic
+        normalized["lifetime_used_traffic"] = lifetime_used_traffic
+        return normalized
+
+    def _normalize_users_payload(self, payload: dict | None) -> dict | None:
+        if not isinstance(payload, dict):
+            return payload
+
+        normalized = dict(payload)
+        users = normalized.get("users")
+        if isinstance(users, list):
+            normalized["users"] = [
+                self._normalize_user_payload(user) for user in users
+            ]
+        return normalized
+
     # ── System ──────────────────────────────────────────────────────────────
 
     async def get_system_stats(self) -> dict:
@@ -137,12 +185,14 @@ class PasarguardService(VpnPanelInterface):
         params = {"offset": offset, "limit": limit}
         if status:
             params["status"] = status
-        return await self._client.get("/api/users", params=params)
+        data = await self._client.get("/api/users", params=params)
+        return self._normalize_users_payload(data) or {}
 
     async def get_user(self, username: str) -> Optional[dict]:
         """Получить VPN пользователя по username."""
         try:
-            return await self._client.get(f"/api/user/{username}")
+            data = await self._client.get(f"/api/user/{username}")
+            return self._normalize_user_payload(data)
         except PasarguardRequestError:
             return None
 
