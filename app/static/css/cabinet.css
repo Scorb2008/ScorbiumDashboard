@@ -164,7 +164,7 @@ a:focus-visible,
 
 .r3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .r2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.rf { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.rf { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr)); gap: 12px; }
 .r3 > *, .r2 > *, .rf > * { min-height: 100%; }
 
 /* ── stack ── */
@@ -212,6 +212,9 @@ a:focus-visible,
   align-items: center;
   justify-content: center;
   gap: 6px;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
   padding: 10px 15px;
   border: 0;
   border-radius: 14px;
@@ -246,6 +249,14 @@ a:focus-visible,
   border-radius: 12px;
   font-size: .78rem;
   font-weight: 700;
+}
+.btn span,
+.btn i {
+  min-width: 0;
+}
+.btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── form ── */
@@ -286,6 +297,7 @@ textarea.inp { resize: vertical; }
 /* ── key card ── */
 
 .kc {
+  min-width: 0;
   border-radius: 18px;
   border: 1px solid var(--border);
   background:
@@ -326,6 +338,7 @@ textarea.inp { resize: vertical; }
 .kl { color: var(--text-muted); }
 .kv { font-weight: 600; text-align: right; }
 .kf {
+  min-width: 0;
   padding: 14px 16px 16px;
   border-top: 1px solid rgba(255,255,255,.05);
   background: rgba(255,255,255,.018);
@@ -462,8 +475,10 @@ textarea.inp { resize: vertical; }
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
 .cp-url {
+  min-width: 0;
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,.08);
@@ -477,11 +492,14 @@ textarea.inp { resize: vertical; }
 }
 .cp-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 .cp-actions .btn {
   width: 100%;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 /* ── server ── */
