@@ -493,7 +493,6 @@ textarea.inp { resize: vertical; }
 .cp-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
   gap: 8px;
   min-width: 0;
 }
@@ -501,13 +500,6 @@ textarea.inp { resize: vertical; }
   width: 100%;
   min-width: 0;
   white-space: nowrap;
-}
-.cp-actions .btn:first-child {
-  justify-self: start;
-}
-.cp-actions .btn:last-child {
-  justify-self: end;
-  margin-top: 12px;
 }
 
 /* ── server ── */
@@ -741,7 +733,6 @@ textarea.inp { resize: vertical; }
   .r3 { grid-template-columns: 1fr; }
   .pay, .tr, .pr { flex-direction: column; align-items: stretch; }
   .cp-actions { grid-template-columns: 1fr; }
-  .cp-actions .btn:last-child { margin-top: 0; justify-self: stretch; }
   .pg { grid-template-columns: 1fr; }
   .tg { grid-template-columns: repeat(3, 1fr); }
   .lc { padding: 14px; }
