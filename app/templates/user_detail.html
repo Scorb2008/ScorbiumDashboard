@@ -7,6 +7,7 @@
   .user-detail-actions .btn {
     border-radius: 999px;
     font-weight: 700;
+    min-height: 42px;
   }
 
   .user-detail-green {
@@ -19,6 +20,47 @@
     border-color: rgba(0, 212, 170, .5);
     color: #7fffe5;
     background: linear-gradient(135deg, rgba(0, 212, 170, .26), rgba(16, 185, 129, .14));
+  }
+
+  .user-detail-actions-title {
+    margin-bottom: .8rem;
+    color: var(--text);
+    font-size: .9rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+  }
+
+  .user-detail-action-note {
+    margin-top: -.1rem;
+    margin-bottom: .85rem;
+    color: var(--text-muted);
+    font-size: .74rem;
+    line-height: 1.5;
+  }
+
+  .user-detail-green-strong {
+    background: linear-gradient(135deg, #00d4aa, #8ee9d8);
+    border: 1px solid rgba(0, 212, 170, .42);
+    color: #051118;
+    box-shadow: 0 14px 28px rgba(0, 212, 170, .16);
+  }
+
+  .user-detail-green-strong:hover {
+    color: #051118;
+    transform: translateY(-1px);
+    filter: brightness(1.03);
+  }
+
+  .user-detail-action-danger {
+    background: linear-gradient(135deg, rgba(0, 212, 170, .2), rgba(248, 113, 113, .12));
+    border: 1px solid rgba(0, 212, 170, .28);
+    color: #d9fff6;
+  }
+
+  .user-detail-action-danger:hover {
+    border-color: rgba(0, 212, 170, .45);
+    color: #effffb;
+    background: linear-gradient(135deg, rgba(0, 212, 170, .28), rgba(248, 113, 113, .18));
   }
 
   .user-detail-mini {
@@ -58,26 +100,28 @@
       </div>
 
       <!-- Actions -->
+      <div class="user-detail-actions-title">Действия</div>
+      <div class="user-detail-action-note">Быстрые действия по пользователю: статус, баланс и сообщение в одном компактном блоке.</div>
       <div class="d-flex flex-column gap-2 user-detail-actions">
         {% if user.is_banned %}
-        <button class="btn btn-sm user-detail-green w-100"
+        <button class="btn btn-sm user-detail-green-strong w-100"
           hx-post="/panel/users/{{ user.id }}/unban" hx-swap="none"
           onclick="location.reload()">
-          <i class="bi bi-unlock me-1"></i>Разбанить
+          <i class="bi bi-unlock me-1"></i>Разбанить пользователя
         </button>
         {% else %}
-        <button class="btn btn-sm btn-outline-danger w-100"
+        <button class="btn btn-sm user-detail-action-danger w-100"
           hx-post="/panel/users/{{ user.id }}/ban" hx-swap="none"
           hx-confirm="Забанить пользователя?" onclick="setTimeout(()=>location.reload(),500)">
-          <i class="bi bi-slash-circle me-1"></i>Забанить
+          <i class="bi bi-slash-circle me-1"></i>Забанить пользователя
         </button>
         {% endif %}
 
-        <button class="btn btn-sm user-detail-green w-100" data-bs-toggle="modal" data-bs-target="#balanceModal">
+        <button class="btn btn-sm user-detail-green-strong w-100" data-bs-toggle="modal" data-bs-target="#balanceModal">
           <i class="bi bi-currency-ruble me-1"></i>Изменить баланс
         </button>
 
-        <button class="btn btn-sm user-detail-green w-100" data-bs-toggle="modal" data-bs-target="#msgModal">
+        <button class="btn btn-sm user-detail-green-strong w-100" data-bs-toggle="modal" data-bs-target="#msgModal">
           <i class="bi bi-chat me-1"></i>Написать сообщение
         </button>
       </div>
