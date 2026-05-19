@@ -4,14 +4,24 @@ __pycache__/
 *$py.class
 *.so
 .Python
-.env
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
 .venv/
 venv/
 ENV/
 env/
-dist/
-build/
-*.egg-info/
+
+# Environment
+.env
+.env.*
+.python-version
 
 # IDE
 .vscode/
@@ -20,24 +30,36 @@ build/
 *.swo
 *kilo
 *.kiro
+*~
+
+# Project docs (generated/notes)
 AGENTS.md
 CODEX_PROJECT_README.md
-*~
+TODO.md
+*TODO.md
 
 # Logs
 logs/
 *.log
+
+# Backups
 backups/
+backup_*.sql
+*.sql.gz
+*.sql.zst
+.env.backup.*
 
 # OS
 .DS_Store
 Thumbs.db
-.ruff_cache
 
-# Project specific
+# Database (local dev)
 *.db
 *.sqlite
 *.sqlite3
-*TODO.md
+
+# Nginx generated
 nginx/ssl/
 nginx/nginx.generated.conf
+
+
