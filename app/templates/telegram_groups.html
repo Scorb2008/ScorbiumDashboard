@@ -1,0 +1,36 @@
+{% set raw = bot_settings.get('vpn_group_ids', '') %}
+{% set selected_ids = raw.split(',') if raw and raw != '[]' else [] %}
+<div class="mb-2" style="font-size:.8rem;font-weight:600;color:var(--text)">Группы Marzban</div>
+{% if groups %}
+  <div style="max-height:220px;overflow-y:auto" id="pg-groups-checkboxes">
+  {% for g in groups %}
+    {% set gid = g.id | string %}
+    <label class="d-flex align-items-center gap-2 py-1" style="font-size:.78rem;cursor:pointer">
+      <input type="checkbox" value="{{ g.id }}" class="form-check-input m-0 pg-group-cb"
+             {% if gid in selected_ids %}checked{% endif %}>
+      {{ g.name or g.id }}
+    </label>
+  {% endfor %}
+  </div>
+  <input type="hidden" name="group_ids" id="pg-group-ids-input" value="{{ raw }}">
+  <input type="text" name="group_name" class="form-control form-control-sm mt-2" placeholder="Название канала (опционально)" value="{{ bot_settings.get('required_channel_name', '') }}">
+  <script>
+  (function(){
+    var container = document.getElementById('pg-groups-checkboxes');
+    if (!container) return;
+    container.addEventListener('change', function(e){
+      if (e.target.classList.contains('pg-group-cb')) {
+        var checked = container.querySelectorAll('.pg-group-cb:checked');
+        var ids = Array.from(checked).map(function(cb){ return cb.value; });
+        document.getElementById('pg-group-ids-input').value = ids.join(',');
+      }
+    });
+  })();
+  </script>
+{% else %}
+  <div style="font-size:.75rem;color:var(--text-muted)">
+    <i class="bi bi-info-circle me-1"></i>Нет групп на панели
+  </div>
+  <input type="hidden" name="group_ids" value="">
+  <input type="text" name="group_name" class="form-control form-control-sm mt-2" placeholder="Название канала (опционально)" value="{{ bot_settings.get('required_channel_name', '') }}">
+{% endif %}
