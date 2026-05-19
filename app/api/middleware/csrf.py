@@ -39,6 +39,8 @@ def _should_skip(request: Request) -> bool:
         return True
     if path.startswith("/static/"):
         return True
+    if path.startswith("/cabinet/"):
+        return True
     if path.startswith("/docs") or path.startswith("/redoc") or path.startswith("/openapi"):
         return True
     return False

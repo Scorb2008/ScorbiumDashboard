@@ -940,7 +940,7 @@ async def cabinet_topup_yookassa(
         return JSONResponse({"ok": False, "message": "Не удалось создать платёж"}, status_code=502)
 
 
-@router.get("/cabinet/pay/status/{payment_id}")
+@router.post("/cabinet/pay/status/{payment_id}")
 async def cabinet_pay_status(
     request: Request, payment_id: int, db: AsyncSession = Depends(get_db),
 ):

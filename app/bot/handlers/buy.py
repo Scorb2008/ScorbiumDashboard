@@ -53,49 +53,37 @@ async def show_plans(callback: CallbackQuery) -> None:
 async def select_plan(callback: CallbackQuery) -> None:
     plan_id = int(callback.data.split(":")[1])
 
-    # Читаем всё внутри сессии пока она открыта
     async with AsyncSessionFactory() as session:
         plan = await PlanService(session).get_by_id(plan_id)
         user = await UserService(session).get_by_id(callback.from_user.id)
         settings = await BotSettingsService(session).get_all()
+        svc = BotSettingsService(session)
         user_lang = user.language if user and str(user.language) else None
         lang = get_lang(settings, str(user_lang))
-        has_cryptobot = bool(settings.get("cryptobot_token", "").strip())
-        # Читаем баланс пока сессия открыта
         user_balance = float(user.balance or 0) if user else 0.0
         plan_is_active = plan.is_active if plan else False
         plan_price = float(plan.price) if plan else 0.0
         plan_name = plan.name if plan else ""
 
+        _yk_toggle = (await svc.get("ps_yookassa_enabled") or "0") == "1"
+        _sbp_toggle = (await svc.get("ps_sbp_enabled") or "0") == "1"
+        _yk_shop_db = await svc.get("yookassa_shop_id_override") or ""
+        _yk_key_db = bool(await svc.get("yookassa_secret_key_override"))
+        _stars_rate = float(await svc.get("stars_rate") or "1.5")
+        _yk_configured = bool(_yk_shop_db and _yk_key_db)
+        has_yookassa = _yk_toggle and _yk_configured
+        has_sbp = _sbp_toggle and _yk_configured
+
+        has_cryptobot = bool(settings.get("cryptobot_token", "").strip()) and (await svc.get("ps_cryptobot_enabled") or "0") == "1"
+
+        _fk_toggle = (await svc.get("ps_freekassa_enabled") or "0") == "1"
+        _fk_shop = await svc.get("freekassa_shop_id") or ""
+        _fk_key = await svc.get("freekassa_api_key") or ""
+        has_freekassa = _fk_toggle and bool(_fk_shop and _fk_key)
+
     if not plan or not plan_is_active:
         await callback.answer(t("no_plans", lang), show_alert=True)
         return
-
-    # Проверяем YooKassa только по DB-настройкам + флагу включения
-    async with AsyncSessionFactory() as _s:
-        _svc = BotSettingsService(_s)
-        _yk_toggle = (await _svc.get("ps_yookassa_enabled") or "0") == "1"
-        _sbp_toggle = (await _svc.get("ps_sbp_enabled") or "0") == "1"
-        _yk_shop_db = await _svc.get("yookassa_shop_id_override") or ""
-        _yk_key_db = bool(await _svc.get("yookassa_secret_key_override"))
-        _stars_rate = float(await _svc.get("stars_rate") or "1.5")
-    _yk_configured = bool(_yk_shop_db and _yk_key_db)
-    has_yookassa = _yk_toggle and _yk_configured
-    has_sbp = _sbp_toggle and _yk_configured
-
-    # CryptoBot toggle
-    async with AsyncSessionFactory() as _s2:
-        _svc2 = BotSettingsService(_s2)
-        _cb_toggle = (await _svc2.get("ps_cryptobot_enabled") or "0") == "1"
-    has_cryptobot = has_cryptobot and _cb_toggle
-
-    # FreeKassa
-    async with AsyncSessionFactory() as _s3:
-        _svc3 = BotSettingsService(_s3)
-        _fk_toggle = (await _svc3.get("ps_freekassa_enabled") or "0") == "1"
-        _fk_shop = await _svc3.get("freekassa_shop_id") or ""
-        _fk_key = await _svc3.get("freekassa_api_key") or ""
-    has_freekassa = _fk_toggle and bool(_fk_shop and _fk_key)
 
     from app.services.telegram_stars import TelegramStarsService
 
