@@ -441,6 +441,15 @@ ensure_env_var "DB_ENGINE" "postgresql"
 ensure_env_var "VPN_PANEL_TYPE" "marzban"
 ensure_env_var "APP_VERSION" "1.0.0"
 ensure_env_var "LE_EMAIL" ""
+if ! grep -q "^ENCRYPTION_KEY=" .env || [[ -z "$(grep "^ENCRYPTION_KEY=" .env | cut -d= -f2- | xargs)" ]]; then
+    warn "ENCRYPTION_KEY не найден в .env — генерирую..."
+    NEW_KEY=$(python3 -c "from app.services.encryption import generate_key; print(generate_key())" 2>/dev/null \
+              || python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null \
+              || openssl rand -base64 32 2>/dev/null \
+              || python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
+    echo "ENCRYPTION_KEY=${NEW_KEY}" >> .env
+    success "ENCRYPTION_KEY добавлен в .env"
+fi
 
 PASARGUARD_ADMIN_PANEL="$(read_env_trimmed "PASARGUARD_ADMIN_PANEL")"
 validate_pasarguard_url "${PASARGUARD_ADMIN_PANEL}"

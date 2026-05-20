@@ -54,7 +54,7 @@ def decrypt_value(encrypted: str) -> str:
         return f.decrypt(encrypted.encode()).decode()
     except Exception as e:
         log.error("Decryption failed: %s", e)
-        return encrypted
+        return ""
 
 
 def is_encrypted(value: str) -> bool:
