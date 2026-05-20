@@ -241,6 +241,70 @@ validate_required_env() {
     [[ -n "$(read_env_value "DB_PASSWORD")" ]] || error "DB_PASSWORD не задан в .env"
 }
 
+ensure_ssl_certificate() {
+    local domain="$1"
+    local cert_dir="nginx/ssl/live/${domain}"
+    local cert_path="${cert_dir}/fullchain.pem"
+    local key_path="${cert_dir}/privkey.pem"
+    local cert_src
+    local le_email
+
+    mkdir -p "${cert_dir}"
+
+    if [[ -f "${cert_path}" && -f "${key_path}" ]]; then
+        success "SSL сертификат уже существует: ${cert_path}"
+        return 0
+    fi
+
+    warn "SSL сертификат не найден для ${domain}. Пытаюсь восстановить автоматически..."
+
+    cert_src="$(ls -d /etc/letsencrypt/live/${domain}* 2>/dev/null | head -1 || true)"
+    if [[ -n "${cert_src}" && -f "${cert_src}/fullchain.pem" && -f "${cert_src}/privkey.pem" ]]; then
+        info "Найден существующий сертификат Let's Encrypt: ${cert_src}"
+    else
+        if ! command -v certbot &>/dev/null; then
+            info "Устанавливаю certbot..."
+            if command -v apt-get &>/dev/null; then
+                apt-get update -qq && apt-get install -y -qq certbot
+            elif command -v yum &>/dev/null; then
+                yum install -y certbot
+            else
+                error "Не удалось установить certbot. Установите вручную."
+            fi
+        fi
+
+        le_email="$(read_env_trimmed "LE_EMAIL")"
+        if [[ -z "${le_email}" ]]; then
+            read -rp "Email для Let's Encrypt: " le_email
+            [[ -z "${le_email}" ]] && error "Email для Let's Encrypt обязателен"
+            replace_env_var "LE_EMAIL" "${le_email}"
+            success "LE_EMAIL сохранён в .env"
+        fi
+
+        warn "Для выпуска сертификата certbot временно остановит nginx, если он запущен."
+        docker compose -f "${COMPOSE_FILE}" stop nginx >/dev/null 2>&1 || true
+        certbot certonly --standalone \
+            --email "${le_email}" \
+            --agree-tos \
+            --no-eff-email \
+            -d "${domain}" || {
+            warn "Не удалось получить SSL сертификат."
+            warn "Убедитесь: домен указывает на сервер, порт 80 открыт."
+            warn "Повторите вручную: certbot certonly --standalone -d ${domain}"
+            return 1
+        }
+
+        cert_src="$(ls -d /etc/letsencrypt/live/${domain}* 2>/dev/null | head -1 || true)"
+    fi
+
+    [[ -z "${cert_src}" ]] && error "Папка сертификатов не найдена в /etc/letsencrypt/live/"
+
+    cp "${cert_src}/fullchain.pem" "${cert_dir}/"
+    cp "${cert_src}/privkey.pem" "${cert_dir}/"
+    chmod 600 "${key_path}"
+    success "Сертификаты скопированы в ${cert_dir}"
+}
+
 diagnose_db_connection_failure() {
     echo ""
     warn "Подключение app к БД не удалось."
@@ -372,6 +436,7 @@ ensure_env_var "DB_EXTERNAL_PORT" "5432"
 ensure_env_var "DB_ENGINE" "postgresql"
 ensure_env_var "VPN_PANEL_TYPE" "marzban"
 ensure_env_var "APP_VERSION" "1.0.0"
+ensure_env_var "LE_EMAIL" ""
 
 PASARGUARD_ADMIN_PANEL="$(read_env_trimmed "PASARGUARD_ADMIN_PANEL")"
 validate_pasarguard_url "${PASARGUARD_ADMIN_PANEL}"
@@ -431,7 +496,7 @@ info "[2/4] Генерирую nginx/nginx.generated.conf (${DOMAIN}:${HTTPS_POR
 prepare_generated_nginx_conf
 
 CERT_PATH="nginx/ssl/live/${DOMAIN}/fullchain.pem"
-[[ ! -f "$CERT_PATH" ]] && warn "SSL сертификат не найден: ${CERT_PATH}. Запустите: certbot certonly --standalone -d ${DOMAIN}"
+ensure_ssl_certificate "${DOMAIN}" || error "SSL сертификат для ${DOMAIN} не готов"
 
 # Redirect: при 443 не добавляем порт в URL
 if [[ "$HTTPS_PORT" == "443" ]]; then
