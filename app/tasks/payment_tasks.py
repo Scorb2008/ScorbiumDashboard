@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionFactory
-from app.models.payment import Payment, PaymentProvider, PaymentStatus
+from app.models.payment import Payment, PaymentProvider, PaymentStatus, PaymentType
 from app.services.payment_fulfillment import PaymentFulfillmentService
 from app.services.payment import PaymentService
 from app.services.plan import PlanService
@@ -118,7 +118,7 @@ async def check_pending_yookassa_payments() -> None:
                         log.warning(f"[polling] Payment {pd['id']} not found")
                         continue
 
-                    if not plan_id:
+                    if payment.payment_type == PaymentType.TOPUP.value:
                         topup_result = await PaymentFulfillmentService(
                             session
                         ).confirm_topup_and_credit_once(
@@ -138,6 +138,13 @@ async def check_pending_yookassa_payments() -> None:
                         )
                         await TelegramNotifyService().send_message(pd["user_id"], text)
                         log.info(f"[polling] Topup {pd['id']} confirmed + balance credited")
+                        continue
+
+                    if not plan_id:
+                        log.warning(
+                            "[polling] Subscription payment %s has no plan_id in metadata",
+                            pd["id"],
+                        )
                         continue
 
                     plan = await PlanService(session).get_by_id(plan_id)

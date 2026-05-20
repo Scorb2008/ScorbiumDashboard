@@ -51,6 +51,7 @@ def test_verify_cryptobot_signature_rejects_modified_body():
 
 
 async def test_get_yookassa_webhook_secret_falls_back_to_env(session, monkeypatch):
+    await reset_bot_settings_cache()
     monkeypatch.setattr(
         "app.api.v1.payments.config",
         SimpleNamespace(
@@ -140,6 +141,51 @@ async def test_yookassa_webhook_rejects_non_whitelisted_ip(session):
     result = await yookassa_webhook(request, db=session)
 
     assert result == {"status": "error", "message": "forbidden"}
+
+
+@pytest.mark.asyncio
+async def test_yookassa_webhook_does_not_treat_subscription_without_plan_id_as_topup(
+    session, monkeypatch
+):
+    user = User(id=111222334, username="yk-user-2", full_name="Yk User 2")
+    payment = Payment(
+        id=43,
+        user_id=user.id,
+        provider=PaymentProvider.YOOKASSA.value,
+        payment_type=PaymentType.SUBSCRIPTION.value,
+        amount=100,
+        currency="RUB",
+        status=PaymentStatus.PENDING.value,
+        external_id="yk_payment_43",
+    )
+    session.add_all([user, payment])
+    await session.commit()
+
+    finalize_topup = pytest.fail
+
+    async def fake_finalize_topup(*args, **kwargs):
+        finalize_topup("subscription webhook must not be finalized as topup")
+
+    monkeypatch.setattr("app.api.v1.payments._finalize_topup_payment", fake_finalize_topup)
+
+    request = _make_json_request(
+        "/api/v1/payments/webhook/yookassa",
+        {
+            "event": "payment.succeeded",
+            "object": {
+                "id": "yk_payment_43",
+                "status": "succeeded",
+                "metadata": {
+                    "payment_id": "43",
+                },
+            },
+        },
+        {"X-Real-IP": "185.71.76.5"},
+    )
+
+    result = await yookassa_webhook(request, db=session)
+
+    assert result == {"status": "ok"}
 
 
 def _make_json_request(path: str, payload: dict, headers: dict[str, str]) -> Request:

@@ -6,7 +6,7 @@ import hashlib
 
 from app.api.dependencies import get_db, get_current_admin
 from app.core.config import config
-from app.models.payment import PaymentStatus
+from app.models.payment import PaymentStatus, PaymentType
 from app.schemas.payment import PaymentCreate, PaymentRead
 from app.services.bot_settings import BotSettingsService
 from app.services.payment import PaymentService
@@ -435,12 +435,17 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
         return {"status": "ok"}
 
     try:
+        payment = await PaymentService(db).get_by_id(int(payment_id))
+        if not payment:
+            log.warning("Yookassa webhook: payment %s not found before processing", payment_id)
+            return {"status": "ok"}
+
         status_value = str(obj.get("status", "")).lower().strip()
         if status_value and status_value != "succeeded":
             log.warning("Yookassa webhook: unexpected object status %s for payment %s", status_value, payment_id)
             return {"status": "ok"}
 
-        if not plan_id:
+        if payment.payment_type == PaymentType.TOPUP.value:
             result = await _finalize_topup_payment(
                 db, int(payment_id), str(external_id)
             )
@@ -450,6 +455,13 @@ async def yookassa_webhook(request: Request, db: AsyncSession = Depends(get_db))
                 log.info(f"Yookassa topup: duplicate or stale webhook ignored for payment {payment_id}")
             else:
                 log.info(f"Yookassa topup: payment {payment_id} confirmed + balance credited")
+            return {"status": "ok"}
+
+        if not plan_id:
+            log.warning(
+                "Yookassa webhook: subscription payment %s missing plan_id metadata",
+                payment_id,
+            )
             return {"status": "ok"}
 
         payment, key, just_confirmed, just_processed = await _finalize_subscription_payment(
