@@ -23,6 +23,7 @@ def payment_methods_kb(
     has_yookassa: bool = False,
     has_sbp: bool = False,
     has_freekassa: bool = False,
+    has_platega: bool = False,
     lang: str = "ru",
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -49,6 +50,13 @@ def payment_methods_kb(
         builder.row(InlineKeyboardButton(
             text=fk_labels.get(lang, fk_labels["ru"]),
             callback_data=f"pay:freekassa:{plan_id}",
+        ))
+
+    if has_platega:
+        platega_labels = {"ru": "🟦 Platega", "en": "🟦 Platega", "fa": "🟦 Platega"}
+        builder.row(InlineKeyboardButton(
+            text=platega_labels.get(lang, platega_labels["ru"]),
+            callback_data=f"pay:platega:{plan_id}",
         ))
 
     # Telegram Stars — всегда

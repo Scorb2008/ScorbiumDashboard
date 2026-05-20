@@ -22,8 +22,6 @@ from app.services.referral import ReferralService
 from app.services.bot_settings import BotSettingsService
 from app.services.payment import PaymentService
 from app.services.i18n import t, get_lang
-from app.bot.utils.menu import get_main_menu_kb as _get_menu_kb
-from app.bot.handlers.admin import _is_admin
 
 router = Router()
 
@@ -128,6 +126,7 @@ PAYMENT_PROVIDER_LABELS = {
     "yookassa_sbp": "pay_provider_yookassa_sbp",
     "cryptobot": "pay_provider_cryptobot",
     "freekassa": "pay_provider_freekassa",
+    "platega": "pay_provider_platega",
     "telegram_stars": "pay_provider_telegram_stars",
     "balance": "pay_provider_balance",
     "topup": "pay_provider_balance",
@@ -513,7 +512,7 @@ async def cb_servers(callback: CallbackQuery) -> None:
     await callback.answer()
 
     async with AsyncSessionFactory() as session:
-        from app.services.i18n import t, get_lang
+        from app.services.i18n import get_lang
 
         settings = await BotSettingsService(session).get_all()
         user = await UserService(session).get_by_id(callback.from_user.id)

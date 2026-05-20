@@ -117,6 +117,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "pay_provider_yookassa_sbp": "🏦 СБП",
         "pay_provider_cryptobot": "₿ Крипто",
         "pay_provider_freekassa": "🟢 FreeKassa",
+        "pay_provider_platega": "🟦 Platega",
         "pay_provider_telegram_stars": "⭐ Stars",
         "pay_provider_balance": "💰 Баланс",
         "pay_type_subscription": "Подписка",

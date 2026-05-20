@@ -428,9 +428,6 @@ async def extend_key(callback: CallbackQuery) -> None:
     async with AsyncSessionFactory() as session:
         from app.services.plan import PlanService
         from app.services.user import UserService
-        from app.services.bot_settings import BotSettingsService
-        from decimal import Decimal
-        from app.core.config import config as _cfg
 
         lang = await _get_lang(callback.from_user.id, session)
         key = await VpnKeyService(session).get_by_id(key_id)
@@ -448,29 +445,8 @@ async def extend_key(callback: CallbackQuery) -> None:
         plans = await PlanService(session).get_all(only_active=True)
         user = await UserService(session).get_by_id(callback.from_user.id)
         balance = float(user.balance or 0) if user else 0
-        settings = await BotSettingsService(session).get_all()
-
-        _yk_toggle = (await BotSettingsService(session).get("ps_yookassa_enabled") or "0") == "1"
-        _sbp_toggle = (await BotSettingsService(session).get("ps_sbp_enabled") or "0") == "1"
-        _yk_shop_db = await BotSettingsService(session).get("yookassa_shop_id_override") or ""
-        _yk_key_db = bool(await BotSettingsService(session).get("yookassa_secret_key_override"))
-        _yk_configured = bool(_yk_shop_db and _yk_key_db)
-        has_yookassa = _yk_toggle and _yk_configured
-        has_sbp = _sbp_toggle and _yk_configured
-
-        _cb_toggle = (await BotSettingsService(session).get("ps_cryptobot_enabled") or "0") == "1"
-        has_cryptobot = bool(settings.get("cryptobot_token", "").strip()) and _cb_toggle
-
-        _fk_toggle = (await BotSettingsService(session).get("ps_freekassa_enabled") or "0") == "1"
-        _fk_shop = await BotSettingsService(session).get("freekassa_shop_id") or ""
-        _fk_key = await BotSettingsService(session).get("freekassa_api_key") or ""
-        has_freekassa = _fk_toggle and bool(_fk_shop and _fk_key)
 
     if not plans:
-        kb_menu = await _get_menu_kb(
-            session, lang=lang, user_id=callback.from_user.id,
-            is_admin=_is_admin(callback.from_user.id),
-        )
         await callback.answer("Нет доступных тарифов", show_alert=True)
         return
 
@@ -497,7 +473,7 @@ async def extend_key(callback: CallbackQuery) -> None:
         InlineKeyboardButton(text=t("back", lang), callback_data=f"key:detail:{key_id}")
     )
 
-    text = f"🔄 <b>Продлить подписку</b>\n\n"
+    text = "🔄 <b>Продлить подписку</b>\n\n"
     text += f"Текущая: {key.name or f'Подписка #{key.id}'}\n"
     text += f"Баланс: <b>{balance:.2f} ₽</b>\n\n"
     if balance > 0:
@@ -524,9 +500,7 @@ async def extend_choose_method(callback: CallbackQuery) -> None:
         from app.services.user import UserService
         from app.services.bot_settings import BotSettingsService
         from app.services.telegram_stars import TelegramStarsService
-        from app.core.config import config as _cfg
 
-        lang = await _get_lang(callback.from_user.id, session)
         plan = await PlanService(session).get_by_id(plan_id)
         user = await UserService(session).get_by_id(callback.from_user.id)
         settings = await BotSettingsService(session).get_all()
@@ -552,6 +526,11 @@ async def extend_choose_method(callback: CallbackQuery) -> None:
         _fk_key = await BotSettingsService(session).get("freekassa_api_key") or ""
         has_freekassa = _fk_toggle and bool(_fk_shop and _fk_key)
 
+        _pl_toggle = (await BotSettingsService(session).get("ps_platega_enabled") or "0") == "1"
+        _pl_merchant = await BotSettingsService(session).get("platega_merchant_id") or ""
+        _pl_secret = await BotSettingsService(session).get("platega_secret") or ""
+        has_platega = _pl_toggle and bool(_pl_merchant and _pl_secret)
+
         _stars_rate = float(await BotSettingsService(session).get("stars_rate") or "1.5")
         stars = TelegramStarsService.rub_to_stars(float(plan.price), rate=_stars_rate)
 
@@ -572,6 +551,11 @@ async def extend_choose_method(callback: CallbackQuery) -> None:
         builder.row(InlineKeyboardButton(
             text="💸 FreeKassa",
             callback_data=f"extend:freekassa:{key_id}:{plan_id}",
+        ))
+    if has_platega:
+        builder.row(InlineKeyboardButton(
+            text="🟦 Platega",
+            callback_data=f"extend:platega:{key_id}:{plan_id}",
         ))
     builder.row(InlineKeyboardButton(
         text=f"⭐ Telegram Stars ({stars} ⭐)",
@@ -615,7 +599,6 @@ async def extend_yookassa(callback: CallbackQuery, bot) -> None:
         from app.services.payment import PaymentService
         from app.models.payment import PaymentProvider
 
-        lang = await _get_lang(callback.from_user.id, session)
         plan = await PlanService(session).get_by_id(plan_id)
         if not plan:
             await callback.answer("Тариф не найден", show_alert=True)
@@ -672,7 +655,6 @@ async def extend_sbp(callback: CallbackQuery, bot) -> None:
         from app.services.payment import PaymentService
         from app.models.payment import PaymentProvider
 
-        lang = await _get_lang(callback.from_user.id, session)
         plan = await PlanService(session).get_by_id(plan_id)
         if not plan:
             await callback.answer("Тариф не найден", show_alert=True)
@@ -729,7 +711,6 @@ async def extend_stars(callback: CallbackQuery, bot) -> None:
         from app.services.telegram_stars import TelegramStarsService
         from app.models.payment import PaymentProvider
 
-        lang = await _get_lang(callback.from_user.id, session)
         plan = await PlanService(session).get_by_id(plan_id)
         if not plan:
             await callback.answer("Тариф не найден", show_alert=True)
@@ -782,7 +763,6 @@ async def extend_crypto(callback: CallbackQuery, bot) -> None:
         from app.services.bot_settings import BotSettingsService
         from app.models.payment import PaymentProvider
 
-        lang = await _get_lang(callback.from_user.id, session)
         plan = await PlanService(session).get_by_id(plan_id)
         settings = await BotSettingsService(session).get_all()
         if not plan:
@@ -848,7 +828,6 @@ async def extend_freekassa(callback: CallbackQuery, bot) -> None:
         from app.services.freekassa import FreeKassaService
         from app.models.payment import PaymentProvider
 
-        lang = await _get_lang(callback.from_user.id, session)
         plan = await PlanService(session).get_by_id(plan_id)
         settings = await BotSettingsService(session).get_all()
         if not plan:
@@ -899,6 +878,78 @@ async def extend_freekassa(callback: CallbackQuery, bot) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("extend:platega:"))
+async def extend_platega(callback: CallbackQuery, bot) -> None:
+    parts = callback.data.split(":")
+    key_id = int(parts[2])
+    plan_id = int(parts[3])
+
+    async with AsyncSessionFactory() as session:
+        from app.services.plan import PlanService
+        from app.services.payment import PaymentService
+        from app.services.bot_settings import BotSettingsService
+        from app.services.platega import PlategaService
+        from app.models.payment import PaymentProvider
+
+        plan = await PlanService(session).get_by_id(plan_id)
+        settings = await BotSettingsService(session).get_all()
+        if not plan:
+            await callback.answer("Тариф не найден", show_alert=True)
+            return
+
+        platega = PlategaService.from_settings(settings)
+        if not platega:
+            await callback.answer("Platega не настроен", show_alert=True)
+            return
+
+        payment = await PaymentService(session).create_pending(
+            user_id=callback.from_user.id, plan=plan,
+            provider=PaymentProvider.PLATEGA,
+        )
+        payment.meta = json.dumps({"extend_key_id": str(key_id)})
+        await session.flush()
+        payment_id = payment.id
+
+        me = await bot.get_me()
+        return_url = f"https://t.me/{me.username}"
+        transaction = await platega.create_transaction(
+            amount=float(plan.price),
+            currency="RUB",
+            description=f"VPN продление — {plan.name}",
+            return_url=return_url,
+            failed_url=return_url,
+            payload_data=f"pl_{payment_id}_{plan_id}_{key_id}",
+            user_telegram_id=str(callback.from_user.id),
+            user_id=str(callback.from_user.id),
+        )
+        if not transaction.get("ok") or not transaction.get("url"):
+            await session.rollback()
+            await callback.answer("Ошибка создания платежа", show_alert=True)
+            return
+
+        payment.external_id = str(transaction.get("transaction_id") or "")
+        await session.commit()
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="Оплатить", url=transaction["url"]))
+    builder.row(InlineKeyboardButton(
+        text="Проверить",
+        callback_data=f"extend:check:platega:{payment_id}:{plan_id}:{key_id}",
+    ))
+    builder.row(InlineKeyboardButton(text="Назад", callback_data=f"extend:methods:{key_id}:{plan_id}"))
+
+    try:
+        from app.bot.utils.media import edit_with_photo
+        await edit_with_photo(
+            callback,
+            f"🟦 <b>Продление через Platega</b>\n\n{plan.name} — {plan.price} ₽\n\nПосле оплаты нажмите «Проверить».",
+            reply_markup=builder.as_markup(),
+        )
+    except Exception:
+        pass
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("extend:check:fk:"))
 async def extend_check_fk(callback: CallbackQuery, bot) -> None:
     parts = callback.data.split(":")
@@ -908,11 +959,8 @@ async def extend_check_fk(callback: CallbackQuery, bot) -> None:
 
     async with AsyncSessionFactory() as session:
         from app.services.payment import PaymentService
-        from app.services.plan import PlanService
-        from app.services.vpn_key import VpnKeyService
         from app.services.bot_settings import BotSettingsService
         from app.services.freekassa import FreeKassaService
-        lang = await _get_lang(callback.from_user.id, session)
         payment = await PaymentService(session).get_by_id(payment_id)
         if not payment or payment.user_id != callback.from_user.id:
             await callback.answer("Платёж не найден", show_alert=True)
@@ -951,6 +999,51 @@ async def extend_check_fk(callback: CallbackQuery, bot) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("extend:check:platega:"))
+async def extend_check_platega(callback: CallbackQuery, bot) -> None:
+    parts = callback.data.split(":")
+    payment_id = int(parts[3])
+    plan_id = int(parts[4])
+    key_id = int(parts[5])
+
+    async with AsyncSessionFactory() as session:
+        from app.services.payment import PaymentService
+        from app.services.bot_settings import BotSettingsService
+        from app.services.platega import PlategaService
+
+        payment = await PaymentService(session).get_by_id(payment_id)
+        if not payment or payment.user_id != callback.from_user.id:
+            await callback.answer("Платёж не найден", show_alert=True)
+            return
+
+        if payment.status == PaymentStatus.SUCCEEDED.value and payment.vpn_key_id:
+            await callback.answer("Уже оплачено!", show_alert=True)
+            return
+
+        settings = await BotSettingsService(session).get_all()
+        platega = PlategaService.from_settings(settings)
+        if not platega or not payment.external_id:
+            await callback.answer("Ошибка", show_alert=True)
+            return
+
+        transaction = await platega.get_transaction_status(payment.external_id)
+        if transaction.get("ok") and str(transaction.get("status", "")).upper() == "CONFIRMED":
+            exp = await _complete_extension_payment(
+                callback.from_user.id,
+                payment_id,
+                plan_id,
+                key_id,
+                str(transaction.get("transaction_id") or payment.external_id),
+            )
+            if exp:
+                await callback.answer(f"Продлено до {exp}!", show_alert=True)
+            else:
+                await callback.answer("Ошибка продления", show_alert=True)
+        else:
+            await callback.answer("Ожидание оплаты...", show_alert=True)
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("extend:check:yk:"))
 async def extend_check_yk(callback: CallbackQuery, bot) -> None:
     parts = callback.data.split(":")
@@ -960,9 +1053,6 @@ async def extend_check_yk(callback: CallbackQuery, bot) -> None:
 
     async with AsyncSessionFactory() as session:
         from app.services.payment import PaymentService
-        from app.services.plan import PlanService
-        from app.services.vpn_key import VpnKeyService
-        lang = await _get_lang(callback.from_user.id, session)
         payment = await PaymentService(session).get_by_id(payment_id)
         if not payment or payment.user_id != callback.from_user.id:
             await callback.answer("Платёж не найден", show_alert=True)
@@ -1010,7 +1100,6 @@ async def extend_check_crypto(callback: CallbackQuery, bot) -> None:
         from app.services.cryptobot import CryptoBotService
         from app.services.payment import PaymentService
         from app.services.vpn_key import VpnKeyService
-        lang = await _get_lang(callback.from_user.id, session)
         settings = await BotSettingsService(session).get_all()
         crypto = CryptoBotService.from_settings(settings)
         if not crypto:
@@ -1117,7 +1206,7 @@ async def extend_pay(callback: CallbackQuery) -> None:
             exp = (
                 extended.expires_at.strftime("%d.%m.%Y") if extended.expires_at else "—"
             )
-            text = f"✅ <b>Подписка продлена!</b>\n\n"
+            text = "✅ <b>Подписка продлена!</b>\n\n"
             text += f"Тариф: {plan.name}\n"
             text += f"Дней: {plan.duration_days}\n"
             text += f"Списано: {price} ₽\n"

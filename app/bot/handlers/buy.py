@@ -81,6 +81,11 @@ async def select_plan(callback: CallbackQuery) -> None:
         _fk_key = await svc.get("freekassa_api_key") or ""
         has_freekassa = _fk_toggle and bool(_fk_shop and _fk_key)
 
+        _pl_toggle = (await svc.get("ps_platega_enabled") or "0") == "1"
+        _pl_merchant = await svc.get("platega_merchant_id") or ""
+        _pl_secret = await svc.get("platega_secret") or ""
+        has_platega = _pl_toggle and bool(_pl_merchant and _pl_secret)
+
     if not plan or not plan_is_active:
         await callback.answer(t("no_plans", lang), show_alert=True)
         return
@@ -103,6 +108,7 @@ async def select_plan(callback: CallbackQuery) -> None:
             has_yookassa=has_yookassa,
             has_sbp=has_sbp,
             has_freekassa=has_freekassa,
+            has_platega=has_platega,
             lang=lang,
         ),
     )

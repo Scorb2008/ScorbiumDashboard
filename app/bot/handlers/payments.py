@@ -3,7 +3,6 @@ from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.bot.keyboards.payments import plans_kb, payment_methods_kb
 from app.bot.keyboards.main import back_kb
 from app.bot.utils.menu import get_main_menu_kb as _get_menu_kb
 from app.bot.handlers.admin import _is_admin
@@ -18,6 +17,7 @@ from app.services.user import UserService
 from app.services.telegram_stars import TelegramStarsService
 from app.services.cryptobot import CryptoBotService
 from app.services.freekassa import FreeKassaService
+from app.services.platega import PlategaService
 from app.services.telegram_notify import TelegramNotifyService
 from app.services.i18n import t, get_lang
 from app.utils.log import log
@@ -53,8 +53,6 @@ async def _provision_and_notify(
     
     CRITICAL: Extract ALL ORM scalars before closing session to avoid DetachedInstanceError.
     """
-    import asyncio
-    
     key_data = None
     plan_data = None 
     payment_amount = None
@@ -157,6 +155,7 @@ async def _provision_and_notify(
         "telegram_stars": "⭐",
         "cryptobot": "₿",
         "freekassa": "🟢",
+        "platega": "🟦",
         "balance": "💰",
     }
     icon = provider_icons.get(str(payment_provider).lower(), "💰")
@@ -730,7 +729,6 @@ async def handle_crypto_check(callback: CallbackQuery, bot: Bot) -> None:
     payment_id = int(parts[2])
     plan_id = int(parts[3])
 
-    payment_ok = False
     external_id = None
 
     async with AsyncSessionFactory() as session:
@@ -1133,6 +1131,146 @@ async def topup_check_crypto(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer(t("topup_error", lang), show_alert=True)
 
 
+# ── Platega ───────────────────────────────────────────────────────────────────
+
+
+@router.callback_query(F.data.startswith("pay:platega:"))
+async def handle_platega_payment(callback: CallbackQuery, bot: Bot) -> None:
+    plan_id = int(callback.data.split(":")[2])
+
+    async with AsyncSessionFactory() as session:
+        plan = await PlanService(session).get_by_id(plan_id)
+        settings = await BotSettingsService(session).get_all()
+        lang = await _get_user_lang(callback.from_user.id, session)
+        if not plan or not plan.is_active:
+            await callback.answer(t("no_plans", lang), show_alert=True)
+            return
+
+        platega = PlategaService.from_settings(settings)
+        if not platega:
+            await callback.answer(t("payment_error", lang), show_alert=True)
+            return
+
+        try:
+            payment = await PaymentService(session).create_pending(
+                user_id=callback.from_user.id,
+                plan=plan,
+                provider=PaymentProvider.PLATEGA,
+            )
+            await session.flush()
+            payment_id = payment.id
+
+            me = await bot.get_me()
+            return_url = f"https://t.me/{me.username}"
+            transaction = await platega.create_transaction(
+                amount=float(plan.price),
+                currency="RUB",
+                description=f"VPN — {plan.name}",
+                return_url=return_url,
+                failed_url=return_url,
+                payload_data=f"pl_{payment_id}_{plan_id}",
+                user_telegram_id=str(callback.from_user.id),
+                user_id=str(callback.from_user.id),
+            )
+            if not transaction.get("ok") or not transaction.get("url"):
+                await session.rollback()
+                await callback.answer(t("payment_error", lang), show_alert=True)
+                return
+
+            payment.external_id = str(transaction.get("transaction_id") or "")
+            await session.commit()
+
+            builder = InlineKeyboardBuilder()
+            builder.row(InlineKeyboardButton(text=t("payment_go", lang), url=transaction["url"]))
+            builder.row(
+                InlineKeyboardButton(
+                    text=t("payment_check", lang),
+                    callback_data=f"platega:check:{payment_id}:{plan.id}",
+                )
+            )
+            builder.row(
+                InlineKeyboardButton(text=t("back", lang), callback_data="back_main")
+            )
+
+            from app.bot.utils.media import edit_with_photo
+
+            await edit_with_photo(
+                callback,
+                f"🟦 <b>Platega</b>\n\n"
+                f"{plan.name} — {plan.price} ₽\n\n"
+                f"{'После оплаты нажмите «Проверить оплату».' if lang == 'ru' else 'After payment press Check payment.'}",
+                reply_markup=builder.as_markup(),
+            )
+        except Exception as e:
+            log.error(f"Platega error for user {callback.from_user.id}: {e}")
+            async with AsyncSessionFactory() as s2:
+                kb = await _get_menu_kb(
+                    s2,
+                    lang=lang,
+                    user_id=callback.from_user.id,
+                    is_admin=_is_admin(callback.from_user.id),
+                )
+            from app.bot.utils.media import edit_with_photo
+
+            await edit_with_photo(callback, t("payment_error", lang), reply_markup=kb)
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("platega:check:"))
+async def handle_platega_check(callback: CallbackQuery, bot: Bot) -> None:
+    parts = callback.data.split(":")
+    payment_id = int(parts[2])
+    plan_id = int(parts[3])
+
+    async with AsyncSessionFactory() as session:
+        lang = await _get_user_lang(callback.from_user.id, session)
+        payment = await PaymentService(session).get_by_id(payment_id)
+        if not payment or payment.user_id != callback.from_user.id:
+            await callback.answer("❌", show_alert=True)
+            return
+        if payment.status == PaymentStatus.SUCCEEDED.value and payment.vpn_key_id:
+            await callback.answer(t("payment_success", lang), show_alert=True)
+            return
+
+        settings = await BotSettingsService(session).get_all()
+        platega = PlategaService.from_settings(settings)
+        if not platega or not payment.external_id:
+            await callback.answer(t("payment_error", lang), show_alert=True)
+            return
+
+    try:
+        transaction = await platega.get_transaction_status(payment.external_id)
+        if transaction.get("ok") and str(transaction.get("status", "")).upper() == "CONFIRMED":
+            async with AsyncSessionFactory() as session:
+                payment = await PaymentService(session).get_by_id(payment_id)
+                plan = await PlanService(session).get_by_id(plan_id)
+                if not payment or not plan or payment.user_id != callback.from_user.id:
+                    await callback.answer(t("payment_error", lang), show_alert=True)
+                    return
+                confirmation = await PaymentService(session).confirm_once(
+                    payment_id, str(transaction.get("transaction_id") or payment.external_id)
+                )
+                delivery = await PaymentFulfillmentService(session).provision_subscription_once(
+                    payment_id, callback.from_user.id, plan
+                )
+                await session.commit()
+            await callback.answer(t("payment_success", lang), show_alert=True)
+            if delivery.key:
+                await _provision_and_notify(
+                    callback.from_user.id,
+                    payment_id,
+                    plan_id,
+                    bot,
+                    force_notify=not confirmation.just_confirmed or not delivery.just_processed,
+                )
+        else:
+            await callback.answer(t("payment_pending", lang), show_alert=True)
+    except Exception as e:
+        log.error(f"Platega check error: {e}")
+        await callback.answer(t("payment_error", lang), show_alert=True)
+
+
 # ── FreeKassa ─────────────────────────────────────────────────────────────────
 
 
@@ -1386,6 +1524,118 @@ async def topup_check_freekassa(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer(t("topup_error", lang), show_alert=True)
 
 
+@router.callback_query(F.data.startswith("topup:pay:platega:"))
+async def topup_platega(callback: CallbackQuery, bot: Bot) -> None:
+    from decimal import Decimal
+
+    amount = Decimal(callback.data.split(":")[3])
+
+    async with AsyncSessionFactory() as session:
+        lang = await _get_user_lang(callback.from_user.id, session)
+        settings = await BotSettingsService(session).get_all()
+        platega = PlategaService.from_settings(settings)
+        if not platega:
+            await callback.answer(t("topup_error", lang), show_alert=True)
+            return
+
+        try:
+            payment = await PaymentService(session).create_topup_pending(
+                user_id=callback.from_user.id,
+                amount=amount,
+                provider=PaymentProvider.PLATEGA,
+            )
+            await session.flush()
+            payment_id = payment.id
+
+            me = await bot.get_me()
+            return_url = f"https://t.me/{me.username}"
+            transaction = await platega.create_transaction(
+                amount=float(amount),
+                currency="RUB",
+                description="Пополнение баланса",
+                return_url=return_url,
+                failed_url=return_url,
+                payload_data=f"pl_topup_{payment_id}",
+                user_telegram_id=str(callback.from_user.id),
+                user_id=str(callback.from_user.id),
+            )
+            if not transaction.get("ok") or not transaction.get("url"):
+                await session.rollback()
+                await callback.answer(t("topup_error", lang), show_alert=True)
+                return
+
+            payment.external_id = str(transaction.get("transaction_id") or "")
+            await session.commit()
+
+            builder = InlineKeyboardBuilder()
+            builder.row(InlineKeyboardButton(text=t("payment_go", lang), url=transaction["url"]))
+            builder.row(
+                InlineKeyboardButton(
+                    text=t("payment_check", lang),
+                    callback_data=f"topup:check:platega:{payment_id}:{amount}",
+                )
+            )
+            builder.row(
+                InlineKeyboardButton(text=t("back", lang), callback_data="topup:menu")
+            )
+
+            from app.bot.utils.media import edit_with_photo
+
+            await edit_with_photo(
+                callback,
+                f"🟦 <b>{'Пополнение через Platega' if lang == 'ru' else 'Platega top up'}</b>\n\n"
+                f"{amount} ₽\n\n"
+                f"{'После оплаты нажмите «Проверить».' if lang == 'ru' else 'After payment press Check.'}",
+                reply_markup=builder.as_markup(),
+            )
+        except Exception as e:
+            log.error(f"Topup Platega error: {e}")
+            await callback.answer(t("topup_error", lang), show_alert=True)
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("topup:check:platega:"))
+async def topup_check_platega(callback: CallbackQuery, bot: Bot) -> None:
+    parts = callback.data.split(":")
+    payment_id = int(parts[3])
+
+    async with AsyncSessionFactory() as session:
+        lang = await _get_user_lang(callback.from_user.id, session)
+        existing = await PaymentService(session).get_by_id(payment_id)
+        if not existing or existing.user_id != callback.from_user.id:
+            await callback.answer(t("topup_error", lang), show_alert=True)
+            return
+        if existing.status == PaymentStatus.SUCCEEDED.value:
+            await callback.answer(
+                f"✅ {'Уже зачислено!' if lang == 'ru' else 'Already credited!'}",
+                show_alert=True,
+            )
+            return
+
+        settings = await BotSettingsService(session).get_all()
+        platega = PlategaService.from_settings(settings)
+        if not platega or not existing.external_id:
+            await callback.answer(t("topup_error", lang), show_alert=True)
+            return
+
+    try:
+        transaction = await platega.get_transaction_status(existing.external_id)
+        if transaction.get("ok") and str(transaction.get("status", "")).upper() == "CONFIRMED":
+            await _topup_confirm_balance(
+                payment_id, str(transaction.get("transaction_id") or existing.external_id), bot
+            )
+            await callback.answer(
+                f"✅ {'Баланс пополнен!' if lang == 'ru' else 'Balance topped up!'}",
+                show_alert=True,
+            )
+        else:
+            await callback.answer(t("payment_pending", lang), show_alert=True)
+    except Exception as e:
+        log.error(f"Topup Platega check error: {e}")
+        await callback.answer(t("topup_error", lang), show_alert=True)
+
+
 # ── Fallback ──────────────────────────────────────────────────────────────────
 
 
@@ -1396,8 +1646,6 @@ async def handle_payment_fallback(callback: CallbackQuery, bot: Bot) -> None:
     
     async with AsyncSessionFactory() as session:
         lang = await _get_user_lang(user_id, session)
-    
-    payment_type = callback.data.split(":")[1] if ":" in callback.data else "unknown"
     
     error_messages = {
         "ru": "❌ Оплата недоступна. Попробуйте позже или выберите другой способ.",

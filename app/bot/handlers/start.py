@@ -411,6 +411,24 @@ async def _show_topup_payment(
             )
         )
 
+    has_platega = (
+        settings.get("ps_platega_enabled", "0") == "1"
+        and bool(settings.get("platega_merchant_id", "").strip())
+        and bool(settings.get("platega_secret", "").strip())
+    )
+    if has_platega:
+        platega_labels = {
+            "ru": "🟦 Platega",
+            "en": "🟦 Platega",
+            "fa": "🟦 Platega",
+        }
+        builder.row(
+            InlineKeyboardButton(
+                text=platega_labels.get(lang, platega_labels["ru"]),
+                callback_data=f"topup:pay:platega:{amount}",
+            )
+        )
+
     # Telegram Stars — всегда доступны
     stars_labels = {
         "ru": f"⭐ Telegram Stars ({stars_amount} ⭐)",
