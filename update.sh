@@ -35,6 +35,15 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || error "Не найдена команда: $1"
 }
 
+prompt_yes_no() {
+    local prompt="$1"
+    local default="${2:-Y}"
+    local answer
+    read -rp "${prompt} " answer
+    answer="${answer:-$default}"
+    [[ "$answer" =~ ^[Yy]$ ]]
+}
+
 read_env_value() {
     local key="$1"
     local line
@@ -226,6 +235,72 @@ validate_pasarguard_url() {
     fi
 }
 
+validate_required_env() {
+    [[ -n "$(read_env_trimmed "DB_NAME")" ]] || error "DB_NAME не задан в .env"
+    [[ -n "$(read_env_trimmed "DB_USER")" ]] || error "DB_USER не задан в .env"
+    [[ -n "$(read_env_value "DB_PASSWORD")" ]] || error "DB_PASSWORD не задан в .env"
+}
+
+diagnose_db_connection_failure() {
+    echo ""
+    warn "Подключение app к БД не удалось."
+    echo "  Проверьте:"
+    echo "  1) DB_HOST=db и DB_PORT=5432 в .env"
+    echo "  2) DB_USER / DB_PASSWORD совпадают с PostgreSQL volume"
+    echo "  3) контейнер vpn_db healthy: docker inspect vpn_db"
+    echo "  4) если пароль менялся после первого запуска, запустите:"
+    echo "     docker compose -f ${COMPOSE_FILE} down -v"
+    echo "     bash setup.sh"
+    echo ""
+}
+
+run_fix_alembic_and_upgrade() {
+    info "Запускаю fix_alembic.py..."
+    if ! docker compose -f "${COMPOSE_FILE}" run --rm app uv run python fix_alembic.py; then
+        warn "fix_alembic.py завершился с ошибкой"
+        diagnose_db_connection_failure
+        return 1
+    fi
+
+    info "Применяю alembic upgrade head..."
+    if ! docker compose -f "${COMPOSE_FILE}" run --rm app uv run alembic upgrade head; then
+        warn "alembic upgrade head завершился с ошибкой"
+        docker compose -f "${COMPOSE_FILE}" logs db --tail=40 2>/dev/null || true
+        diagnose_db_connection_failure
+        return 1
+    fi
+}
+
+maybe_update_from_github() {
+    local branch upstream behind ahead
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+
+    if ! git remote get-url origin >/dev/null 2>&1; then
+        warn "Remote origin не настроен. Пропускаю проверку GitHub."
+        return 0
+    fi
+
+    info "Проверяю обновления GitHub для ветки ${branch}..."
+    git fetch --prune origin || error "Не удалось выполнить git fetch origin"
+
+    upstream="origin/${branch}"
+    if ! git rev-parse --verify "${upstream}" >/dev/null 2>&1; then
+        warn "Ветка ${upstream} не найдена. Пропускаю pull."
+        return 0
+    fi
+
+    behind="$(git rev-list --count HEAD.."${upstream}")"
+    ahead="$(git rev-list --count "${upstream}"..HEAD)"
+    info "Git status: ahead=${ahead}, behind=${behind}"
+
+    if prompt_yes_no "Подтянуть свежие изменения из GitHub? [Y/n]:" "Y"; then
+        git pull --ff-only origin "${branch}" || error "git pull --ff-only failed. Проверьте ветку и локальные изменения."
+        success "Код обновлён из GitHub"
+    else
+        warn "GitHub update пропущен. Продолжаю с текущим локальным кодом."
+    fi
+}
+
 run_app_http_check() {
     local path="$1"
     local expected="$2"
@@ -268,9 +343,11 @@ run_smoke_checks() {
 require_cmd git
 require_cmd docker
 require_cmd openssl
+require_cmd python3
 docker compose version >/dev/null 2>&1 || error "Требуется Docker Compose v2"
 check_disk_space
 check_clean_git_tree
+validate_required_env
 
 DOMAIN="$(read_env_trimmed "DOMAIN")"
 HTTPS_PORT="$(read_env_trimmed "HTTPS_PORT")"
@@ -300,8 +377,8 @@ validate_pasarguard_url "${PASARGUARD_ADMIN_PANEL}"
 
 info "Домен: ${DOMAIN}, HTTPS порт: ${HTTPS_PORT}"
 
-# ── [1/4] git pull ────────────────────────────────────────────────────────────
-info "[1/4] Обновляю код..."
+# ── [1/4] GitHub update ───────────────────────────────────────────────────────
+info "[1/4] Проверка обновлений кода..."
 
 # Бэкап БД перед обновлением
 DB_NAME="$(read_env_value "DB_NAME")"
@@ -325,7 +402,7 @@ else
     warn "Контейнер vpn_db не запущен, пропускаю бэкап"
 fi
 
-git pull --ff-only || error "git pull --ff-only failed. Проверьте ветку и локальные изменения."
+maybe_update_from_github
 
 # ── APP_VERSION из pyproject.toml ─────────────────────────────────────────────
 NEW_VER=$(grep '^version' pyproject.toml 2>/dev/null | head -1 | sed 's/.*= *"\(.*\)"/\1/' || true)
@@ -423,6 +500,7 @@ http {
             limit_req zone=panel burst=20 nodelay;
             proxy_pass http://vpn_app;
             proxy_set_header Host              \$host;
+            proxy_set_header X-Forwarded-Host \$http_host;
             proxy_set_header X-Real-IP         \$remote_addr;
             proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
@@ -434,13 +512,16 @@ http {
             limit_req zone=panel burst=20 nodelay;
             proxy_pass http://vpn_app;
             proxy_set_header Host              \$host;
+            proxy_set_header X-Forwarded-Host \$http_host;
             proxy_set_header X-Real-IP         \$remote_addr;
             proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Telegram-Init-Data \$http_x_telegram_init_data;
         }
         location /app/ {
             proxy_pass http://vpn_app;
             proxy_set_header Host              \$host;
+            proxy_set_header X-Forwarded-Host \$http_host;
             proxy_set_header X-Real-IP         \$remote_addr;
             proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
@@ -449,6 +530,7 @@ http {
             limit_req zone=api burst=30 nodelay;
             proxy_pass http://vpn_app;
             proxy_set_header Host              \$host;
+            proxy_set_header X-Forwarded-Host \$http_host;
             proxy_set_header X-Real-IP         \$remote_addr;
             proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
@@ -457,6 +539,7 @@ http {
             limit_req zone=webhook burst=50 nodelay;
             proxy_pass http://vpn_app;
             proxy_set_header Host              \$host;
+            proxy_set_header X-Forwarded-Host \$http_host;
             proxy_set_header X-Real-IP         \$remote_addr;
             proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
@@ -470,6 +553,7 @@ http {
         location ~ ^/(docs|redoc|openapi\.json) {
             proxy_pass http://vpn_app;
             proxy_set_header Host              \$host;
+            proxy_set_header X-Forwarded-Host \$http_host;
             proxy_set_header X-Forwarded-Proto \$scheme;
         }
         # WebSocket notifications endpoint
@@ -479,6 +563,7 @@ http {
             proxy_set_header Upgrade \$http_upgrade;
             proxy_set_header Connection "upgrade";
             proxy_set_header Host              \$host;
+            proxy_set_header X-Forwarded-Host \$http_host;
             proxy_set_header X-Real-IP         \$remote_addr;
             proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
@@ -489,6 +574,7 @@ http {
         location / {
             proxy_pass http://vpn_app;
             proxy_set_header Host              \$host;
+            proxy_set_header X-Forwarded-Host \$http_host;
             proxy_set_header X-Real-IP         \$remote_addr;
             proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
@@ -510,8 +596,12 @@ docker compose -f "${COMPOSE_FILE}" up -d db
 wait_for_container_health "vpn_db" "PostgreSQL" 18 5
 ensure_database_prerequisites
 
-docker compose -f "${COMPOSE_FILE}" run --rm app uv run python fix_alembic.py
-docker compose -f "${COMPOSE_FILE}" run --rm app uv run alembic upgrade head
+if ! verify_app_db_connection; then
+    diagnose_db_connection_failure
+    error "Перед миграциями app не может подключиться к БД"
+fi
+
+run_fix_alembic_and_upgrade || error "Не удалось применить миграции"
 success "Миграции БД применены"
 
 info "Перезапускаю контейнеры приложения..."

@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.responses import Response
 
-from app.api.cabinet.views import _cabinet_redirect_url, _persist_cabinet_session
+from app.api.cabinet.views import _absolute_cabinet_url, _cabinet_redirect_url, _persist_cabinet_session
 
 
 class _User:
@@ -22,6 +22,25 @@ def _make_request(*, cookie: str | None = None, forwarded_proto: str = "https") 
         "raw_path": b"/cabinet/",
         "query_string": b"",
         "headers": headers,
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+    }
+    return Request(scope)
+
+
+def _make_request_with_forwarded_host(host: str) -> Request:
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/cabinet/",
+        "raw_path": b"/cabinet/",
+        "query_string": b"",
+        "headers": [
+            (b"x-forwarded-proto", b"https"),
+            (b"x-forwarded-host", host.encode()),
+        ],
         "client": ("127.0.0.1", 12345),
         "server": ("testserver", 80),
     }
@@ -68,3 +87,11 @@ def test_cabinet_redirect_url_keeps_miniapp_context():
     redirect_url = _cabinet_redirect_url(request)
 
     assert redirect_url == "/cabinet/?miniapp=1&tg_init_data=demo-init-data"
+
+
+def test_absolute_cabinet_url_keeps_forwarded_host_port():
+    request = _make_request_with_forwarded_host("example.com:8443")
+
+    absolute_url = _absolute_cabinet_url(request, "/cabinet/balance", payment_id=123)
+
+    assert absolute_url == "https://example.com:8443/cabinet/balance?payment_id=123"

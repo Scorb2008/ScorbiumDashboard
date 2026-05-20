@@ -16,6 +16,63 @@ success() { echo -e "${GREEN}[OK]${RESET}   $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${RESET} $*"; }
 error()   { echo -e "${RED}[ERR]${RESET}  $*" >&2; exit 1; }
 
+require_cmd() {
+    command -v "$1" &>/dev/null || error "Не найдена команда '$1'"
+}
+
+diagnose_db_failure() {
+    echo ""
+    warn "Возникла проблема с подключением к PostgreSQL."
+    echo "  Проверьте:"
+    echo "  1) DB_HOST=db и DB_PORT=5432 в .env"
+    echo "  2) DB_USER / DB_PASSWORD совпадают с уже существующим volume PostgreSQL"
+    echo "  3) контейнер БД healthy: docker inspect vpn_db"
+    echo "  4) логи БД: docker compose -f docker-compose.prod.yml logs db --tail=40"
+    echo ""
+    echo "  Если пароль в .env изменили после первого запуска:"
+    echo "     docker compose -f docker-compose.prod.yml down -v"
+    echo "     bash setup.sh"
+    echo ""
+}
+
+wait_for_health() {
+    local container="$1"
+    local label="$2"
+    local attempts="$3"
+    local delay="$4"
+    local status
+
+    info "Жду готовности ${label}..."
+    for i in $(seq 1 "${attempts}"); do
+        status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${container}" 2>/dev/null || echo "starting")"
+        if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+            success "${label} готов"
+            return 0
+        fi
+        sleep "${delay}"
+    done
+
+    return 1
+}
+
+run_prod_migrations() {
+    local dc="$1"
+    info "Применяю миграции БД..."
+    if ! docker compose -f "$dc" run --rm app uv run python fix_alembic.py; then
+        warn "fix_alembic.py завершился с ошибкой"
+        diagnose_db_failure
+        docker compose -f "$dc" logs db --tail=40 2>/dev/null || true
+        return 1
+    fi
+    if ! docker compose -f "$dc" run --rm app uv run alembic upgrade head; then
+        warn "alembic upgrade head завершился с ошибкой"
+        diagnose_db_failure
+        docker compose -f "$dc" logs db --tail=40 2>/dev/null || true
+        return 1
+    fi
+    success "Миграции применены"
+}
+
 NGINX_GENERATED_CONF="nginx/nginx.generated.conf"
 
 prepare_generated_nginx_conf() {
@@ -52,8 +109,8 @@ preflight_checks() {
     fi
 
     # Required tools
-    for cmd in curl openssl; do
-        command -v "$cmd" &>/dev/null || error "Не найден '$cmd'. Установите: sudo apt install $cmd"
+    for cmd in curl openssl python3; do
+        require_cmd "$cmd"
     done
 
     # Disk space (need at least 2GB free)
@@ -569,36 +626,6 @@ CRONEOF
         success "Автообновление SSL настроено (каждый день в 3:00)"
     fi
 
-    # DB password sync check
-    if docker volume inspect docker-compose.prod.yml_db_data &>/dev/null 2>&1 || \
-       docker volume ls --format '{{.Name}}' 2>/dev/null | grep -q "vpn_db"; then
-        info "БД уже существует — проверяю синхронизацию пароля..."
-        docker compose -f docker-compose.prod.yml up -d db
-        sleep 3
-        if docker exec vpn_db psql -U "${DB_USER}" -d "${DB_NAME}" -c "SELECT 1" &>/dev/null 2>&1; then
-            success "Пароль БД совпадает"
-        else
-            warn "Пароль БД в .env не совпадает с тем, с которым была создана БД!"
-            warn "Это происходит если вы изменили DB_PASSWORD после первого запуска."
-            echo ""
-            echo "  Варианты:"
-            echo "  1) Сбросить БД (все данные будут удалены):"
-            echo "     docker compose -f docker-compose.prod.yml down -v"
-            echo "     bash setup.sh"
-            echo "  2) Восстановить старый пароль из бэкапа .env"
-            echo ""
-            read -rp "Сбросить БД и пересоздать? [y/N]: " RESET_DB; RESET_DB=${RESET_DB:-N}
-            if [[ "$RESET_DB" =~ ^[Yy]$ ]]; then
-                docker compose -f docker-compose.prod.yml down -v
-                success "БД удалена — будет создана заново"
-            else
-                rm -f setup.lock
-                exit 1
-            fi
-        fi
-    fi
-
-    # DB password sync check (runs for any compose file)
     _DC="docker-compose.prod.yml"
     _DB_VOLUME="scorbiumdashboard_vpn_db_data"
     if docker volume ls --format '{{.Name}}' 2>/dev/null | grep -qF "$_DB_VOLUME"; then
@@ -631,48 +658,21 @@ CRONEOF
     info "Запускаю БД..."
     docker compose -f "$_DC" up -d db
 
-    info "Жду готовности БД (макс 60 сек)..."
-    DB_READY=false
-    for i in $(seq 1 12); do
-        STATUS=$(docker inspect --format='{{.State.Health.Status}}' vpn_db 2>/dev/null || echo "starting")
-        if [[ "$STATUS" == "healthy" ]]; then
-            DB_READY=true
-            success "БД готова"
-            break
-        fi
-        sleep 5
-    done
-
-    if [[ "$DB_READY" != "true" ]]; then
+    if ! wait_for_health "vpn_db" "БД" 12 5; then
         warn "БД не стала healthy за 60 сек"
         docker compose -f "$_DC" logs db --tail=20
+        diagnose_db_failure
         rm -f setup.lock
         exit 1
     fi
 
-    # Миграции (с возможностью исправить БД до старта app)
-    info "Применяю миграции БД..."
-    docker compose -f "$_DC" run --rm app uv run python fix_alembic.py || true
-    docker compose -f "$_DC" run --rm app uv run alembic upgrade head
-    success "Миграции применены"
+    run_prod_migrations "$_DC" || { rm -f setup.lock; exit 1; }
 
     # Теперь запускаем app
     info "Запускаю app..."
     docker compose -f "$_DC" up -d app
 
-    info "Жду готовности app (макс 90 сек)..."
-    APP_READY=false
-    for i in $(seq 1 18); do
-        STATUS=$(docker inspect --format='{{.State.Health.Status}}' vpn_app 2>/dev/null || echo "starting")
-        if [[ "$STATUS" == "healthy" ]]; then
-            APP_READY=true
-            success "App готов (${i}x5 сек)"
-            break
-        fi
-        sleep 5
-    done
-
-    if [[ "$APP_READY" != "true" ]]; then
+    if ! wait_for_health "vpn_app" "App" 18 5; then
         warn "App не стал healthy за 90 сек"
         docker compose -f "$_DC" logs app --tail=30
         read -rp "Продолжить? [Y/n]: " CONFIRM; CONFIRM=${CONFIRM:-Y}
@@ -706,19 +706,7 @@ else
     docker compose down --remove-orphans 2>/dev/null || true
     docker compose up -d db app nginx
 
-    info "Жду запуска (макс 60 сек)..."
-    APP_READY=false
-    for i in $(seq 1 12); do
-        STATUS=$(docker inspect --format='{{.State.Health.Status}}' vpn_app 2>/dev/null || echo "starting")
-        if [[ "$STATUS" == "healthy" ]]; then
-            APP_READY=true
-            success "App готов (${i}x5 сек)"
-            break
-        fi
-        sleep 5
-    done
-
-    if [[ "$APP_READY" != "true" ]]; then
+    if ! wait_for_health "vpn_app" "App" 12 5; then
         warn "App не стал healthy за 60 сек:"
         docker compose logs app --tail=20
         rm -f setup.lock
@@ -728,14 +716,26 @@ else
     info "Проверяю пароль БД..."
     DB_PASS=${DB_PASS:-postgres}
     if ! docker exec -e PGPASSWORD="${DB_PASS}" vpn_db psql -U "${DB_USER}" -d "${DB_NAME}" -h localhost -c "SELECT 1" &>/dev/null 2>&1; then
-        warn "Пароль БД не совпадает. Исправляю..."
-        docker exec vpn_db psql -U "${DB_USER}" -c "ALTER USER ${DB_USER} PASSWORD '${DB_PASS}';" &>/dev/null 2>&1
+        warn "Пароль БД не совпадает. Пытаюсь синхронизировать..."
+        if ! docker exec vpn_db psql -U "${DB_USER}" -c "ALTER USER ${DB_USER} PASSWORD '${DB_PASS}';" &>/dev/null 2>&1; then
+            diagnose_db_failure
+            rm -f setup.lock
+            exit 1
+        fi
         sleep 1
     fi
 
     info "Применяю миграции БД..."
-    docker compose exec app uv run python fix_alembic.py
-    docker compose exec app uv run alembic upgrade head
+    if ! docker compose exec app uv run python fix_alembic.py; then
+        diagnose_db_failure
+        rm -f setup.lock
+        exit 1
+    fi
+    if ! docker compose exec app uv run alembic upgrade head; then
+        diagnose_db_failure
+        rm -f setup.lock
+        exit 1
+    fi
     success "Миграции применены"
 fi
 
